@@ -1,0 +1,13 @@
+project_id = "ogkpokpxycvxwsrdrddj"
+
+[functions.analyze-outfit]
+verify_jwt = false
+
+[functions.chat-styloren]
+verify_jwt = false
+
+[functions.compare-outfits]
+verify_jwt = false
+
+[functions.password-reset]
+verify_jwt = false

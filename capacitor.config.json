@@ -1,0 +1,19 @@
+{
+  "appId": "app.lovable.33f79ef0fa5645f6af48e9b1bfbf5463",
+  "appName": "Styloren",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "plugins": {
+    "CapacitorPurchases": {
+      "productIdentifiers": [
+        "styloren_credits_10",
+        "styloren_pro_yearly"
+      ]
+    }
+  }
+}
