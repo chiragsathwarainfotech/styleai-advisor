@@ -13,17 +13,17 @@ interface CreditsPricingModalProps {
   onPlanPurchased: (plan: CreditPlan) => Promise<boolean>;
 }
 
-export function CreditsPricingModal({ 
-  open, 
-  onOpenChange, 
-  userId, 
-  onPlanPurchased 
+export function CreditsPricingModal({
+  open,
+  onOpenChange,
+  userId,
+  onPlanPurchased
 }: CreditsPricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const { toast } = useToast();
 
-  const isNativeMobile = Capacitor.isNativePlatform() && 
+  const isNativeMobile = Capacitor.isNativePlatform() &&
     (Capacitor.getPlatform() === "ios" || Capacitor.getPlatform() === "android");
 
   const showNativeAppRequired = !isNativeMobile;
@@ -42,9 +42,11 @@ export function CreditsPricingModal({
 
     try {
       // Use native IAP via RevenueCat to process payment
-    const { Purchases } = await import("@revenuecat/purchases-capacitor");
+      const { Purchases } = await import("@revenuecat/purchases-capacitor");
 
-const offerings = await Purchases.getOfferings();
+      console.log("Capacitor platform:", Capacitor.getPlatform());
+      console.log("Is native:", Capacitor.isNativePlatform());
+      const offerings = await Purchases.getOfferings();
       const currentOffering = offerings.current;
       if (!currentOffering) {
         throw new Error("No offerings available. Please try again later.");
@@ -58,12 +60,12 @@ const offerings = await Purchases.getOfferings();
       }
 
       const { customerInfo } = await Purchases.purchasePackage({
-  aPackage: pkg,
-});
+        aPackage: pkg,
+      });
       if (customerInfo) {
         // Payment succeeded — now grant credits
         const success = await onPlanPurchased(plan);
-        
+
         if (success) {
           toast({
             title: "Purchase Successful! 🎉",
@@ -108,8 +110,8 @@ const offerings = await Purchases.getOfferings();
 
     setRestoringPurchases(true);
     try {
-     const { Purchases } = await import("@revenuecat/purchases-capacitor");
-const customerInfo = await Purchases.restorePurchases();
+      const { Purchases } = await import("@revenuecat/purchases-capacitor");
+      const customerInfo = await Purchases.restorePurchases();
 
       if (customerInfo) {
         toast({
@@ -161,7 +163,7 @@ const customerInfo = await Purchases.restorePurchases();
               <div>
                 <p className="font-semibold text-foreground text-sm">Download the App to Purchase</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  In-App Purchases are available exclusively through the Styloren mobile app. 
+                  In-App Purchases are available exclusively through the Styloren mobile app.
                   Download from the App Store or Google Play to get credits.
                 </p>
               </div>
@@ -173,18 +175,17 @@ const customerInfo = await Purchases.restorePurchases();
           {CREDIT_PLANS.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-xl p-5 border-2 transition-all ${
-                plan.highlight
-                  ? "border-primary bg-primary/5 shadow-soft"
-                  : "border-border hover:border-primary/50"
-              }`}
+              className={`relative rounded-xl p-5 border-2 transition-all ${plan.highlight
+                ? "border-primary bg-primary/5 shadow-soft"
+                : "border-border hover:border-primary/50"
+                }`}
             >
               {plan.highlight && (
                 <div className="absolute -top-3 left-4 px-3 py-1 rounded-full gradient-primary text-xs font-semibold text-primary-foreground">
                   Best Value
                 </div>
               )}
-              
+
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="font-display font-semibold text-foreground text-lg">
@@ -205,11 +206,11 @@ const customerInfo = await Purchases.restorePurchases();
               <ul className="space-y-2 mb-4">
                 <li className="flex items-center gap-2 text-sm text-foreground/80">
                   <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  {plan.id === "monthly_value" 
-                    ? "50 credits for consistent styling" 
-                    : plan.id === "quarterly_saver" 
-                    ? "100 credits for serious style planning" 
-                    : `${plan.credits} credits to explore Styloren`}
+                  {plan.id === "monthly_value"
+                    ? "50 credits for consistent styling"
+                    : plan.id === "quarterly_saver"
+                      ? "100 credits for serious style planning"
+                      : `${plan.credits} credits to explore Styloren`}
                 </li>
                 <li className="flex items-center gap-2 text-sm text-foreground/80">
                   <Check className="w-4 h-4 text-primary flex-shrink-0" />
