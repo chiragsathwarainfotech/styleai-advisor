@@ -42,10 +42,9 @@ export function CreditsPricingModal({
 
     try {
       // Use native IAP via RevenueCat to process payment
-      const { CapacitorPurchases } = await import("@capgo/capacitor-purchases");
-      
-      // Get offerings and find the matching package by product identifier
-      const { offerings } = await CapacitorPurchases.getOfferings();
+    const { Purchases } = await import("@revenuecat/purchases-capacitor");
+
+const offerings = await Purchases.getOfferings();
       const currentOffering = offerings.current;
       if (!currentOffering) {
         throw new Error("No offerings available. Please try again later.");
@@ -58,11 +57,9 @@ export function CreditsPricingModal({
         throw new Error("Product not found. Please try again later.");
       }
 
-      const { customerInfo } = await CapacitorPurchases.purchasePackage({
-        identifier: pkg.identifier,
-        offeringIdentifier: currentOffering.identifier,
-      });
-
+      const { customerInfo } = await Purchases.purchasePackage({
+  aPackage: pkg,
+});
       if (customerInfo) {
         // Payment succeeded — now grant credits
         const success = await onPlanPurchased(plan);
@@ -111,10 +108,10 @@ export function CreditsPricingModal({
 
     setRestoringPurchases(true);
     try {
-      const { CapacitorPurchases } = await import("@capgo/capacitor-purchases");
-      const result = await CapacitorPurchases.restorePurchases();
+     const { Purchases } = await import("@revenuecat/purchases-capacitor");
+const customerInfo = await Purchases.restorePurchases();
 
-      if (result.customerInfo) {
+      if (customerInfo) {
         toast({
           title: "Purchases Restored! 🎉",
           description: "Your previous purchases have been restored.",
