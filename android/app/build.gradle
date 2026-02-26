@@ -19,7 +19,7 @@ android {
         applicationId "app.lovable.styleai"
         minSdkVersion 22
         targetSdkVersion 35
-        versionCode 1
+        versionCode 3
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -52,6 +52,7 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 //    implementation project(':capacitor-cordova-android-plugins')
+    implementation "com.android.billingclient:billing:6.1.0"
 }
 
 apply from: 'capacitor.build.gradle'
