@@ -13,8 +13,9 @@
   "dependencies": {
     "@capacitor/android": "^5.7.8",
     "@capacitor/cli": "^5.7.8",
-    "@capacitor/core": "^5.7.8",
-    "@capacitor/ios": "^5.7.8",
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
+    "@capgo/capacitor-purchases": "^5.0.8",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/playfair-display": "^5.2.8",
     "@hookform/resolvers": "^3.10.0",

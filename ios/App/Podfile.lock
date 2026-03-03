@@ -1,0 +1,40 @@
+PODS:
+  - Capacitor (8.1.0):
+    - CapacitorCordova
+  - CapacitorCordova (8.1.0)
+  - CapgoCapacitorPurchases (5.0.8):
+    - Capacitor
+    - PurchasesHybridCommon (= 4.8.0)
+    - RevenueCat (>= 4.16.0)
+  - PurchasesHybridCommon (4.8.0):
+    - RevenueCat (= 4.16.0)
+  - RevenueCat (4.16.0)
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapgoCapacitorPurchases (from `../../node_modules/@capgo/capacitor-purchases`)"
+
+SPEC REPOS:
+  trunk:
+    - PurchasesHybridCommon
+    - RevenueCat
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapgoCapacitorPurchases:
+    :path: "../../node_modules/@capgo/capacitor-purchases"
+
+SPEC CHECKSUMS:
+  Capacitor: 47b825120c6b8b6d6f9f053e9350a8960d436710
+  CapacitorCordova: e8b76fd95fc1e157775abc484c59cc0de464095d
+  CapgoCapacitorPurchases: 26ab63e5b3d41541b02c77badfbe448ff4b48a95
+  PurchasesHybridCommon: bd1e1d3476afd3f95332b0ae160e4ce1bd1efd99
+  RevenueCat: c12e14f5e3dc5732db6d5095ac4ce6ff08d7eeb0
+
+PODFILE CHECKSUM: b7f03e0c955e9c59dcca81c7ea107b67cea59cb7
+
+COCOAPODS: 1.16.2
