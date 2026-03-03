@@ -21,17 +21,28 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+  async function initRevenueCat() {
+    if (
+      Capacitor.isNativePlatform() &&
+      (Capacitor.getPlatform() === "android" ||
+       Capacitor.getPlatform() === "ios")
+    ) {
+      try {
+        console.log("Initializing RevenueCat");
 
-    console.log("Initializing RevenueCat");
+        await Purchases.configure({
+          apiKey: "test_dcpunFsYSVMqwTpHJzaeQPXBUhE"
+        });
 
-    Purchases.configure({
-      apiKey:
-        Capacitor.getPlatform() === "android"
-          ? "GOOGLE_PLAY_PUBLIC_API_KEY"
-          : "APPLE_PUBLIC_API_KEY",
-    });
-  }, []);
+        console.log("RevenueCat configured successfully");
+      } catch (error) {
+        console.error("RevenueCat init error:", error);
+      }
+    }
+  }
+
+  initRevenueCat();
+}, []);
 
   return (
     <QueryClientProvider client={queryClient}>
