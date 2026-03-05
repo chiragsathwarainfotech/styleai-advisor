@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import { Capacitor } from "@capacitor/core";
 import { Purchases } from "@revenuecat/purchases-capacitor";
 import { useEffect } from "react";
+import { User } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -29,7 +30,7 @@ const App = () => {
     ) {
       try {
         console.log("Initializing RevenueCat");
-
+        
         await Purchases.configure({
           apiKey: "test_dcpunFsYSVMqwTpHJzaeQPXBUhE"
         });
