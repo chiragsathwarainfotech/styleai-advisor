@@ -14,7 +14,7 @@ android {
 
 
     namespace "app.lovable.styleai"
-    compileSdkVersion 36
+    compileSdkVersion 35
     defaultConfig {
         applicationId "app.lovable.styleai"
         minSdkVersion 22
