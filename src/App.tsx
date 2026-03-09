@@ -22,28 +22,28 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-  async function initRevenueCat() {
-    if (
-      Capacitor.isNativePlatform() &&
-      (Capacitor.getPlatform() === "android" ||
-       Capacitor.getPlatform() === "ios")
-    ) {
-      try {
-        console.log("Initializing RevenueCat");
-        
-        await Purchases.configure({
-          apiKey: "test_dcpunFsYSVMqwTpHJzaeQPXBUhE"
-        });
+    async function initRevenueCat() {
+      if (
+        Capacitor.isNativePlatform() &&
+        (Capacitor.getPlatform() === "android" ||
+          Capacitor.getPlatform() === "ios")
+      ) {
+        try {
+          console.log("Initializing RevenueCat");
 
-        console.log("RevenueCat configured successfully");
-      } catch (error) {
-        console.error("RevenueCat init error:", error);
+          await Purchases.configure({
+            apiKey: "goog_AOXyYHWMVxNshsjHtHOTleuuysM"
+          });
+
+          console.log("RevenueCat configured successfully");
+        } catch (error) {
+          console.error("RevenueCat init error:", error);
+        }
       }
     }
-  }
 
-  initRevenueCat();
-}, []);
+    initRevenueCat();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
