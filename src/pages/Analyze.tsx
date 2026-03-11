@@ -28,10 +28,10 @@ const Analyze = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [showNoCredits, setShowNoCredits] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
-  
+
   // Name state
   const [showNameModal, setShowNameModal] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -60,7 +60,7 @@ const Analyze = () => {
 
   const handleNameComplete = async (name: string) => {
     setShowNameModal(false);
-    
+
     if (user) {
       await supabase
         .from("user_subscriptions")
@@ -175,12 +175,12 @@ const Analyze = () => {
       if (credits.saveScanHistory) {
         const styleScoreMatch = data.analysis.match(/Style Score[:\s]*(\d+)/i);
         const styleScore = styleScoreMatch ? parseInt(styleScoreMatch[1], 10) : null;
-        
+
         const categoryMatch = data.analysis.match(/(?:Overall Style|Style Category|Look)[:\s]*([A-Za-z]+)/i);
         const outfitCategory = categoryMatch ? categoryMatch[1] : null;
-        
+
         await saveScan(imageBase64, data.analysis, styleScore ?? undefined, outfitCategory ?? undefined);
-        
+
         toast({
           title: "Analysis complete!",
           description: "Your outfit has been analyzed and saved to history.",
@@ -253,15 +253,15 @@ const Analyze = () => {
             isExpired={credits.isExpired}
             onGetCredits={handleGetCredits}
           />
-          <Button 
-            variant="ghost" 
-            onClick={() => setShowNoCredits(false)} 
+          <Button
+            variant="ghost"
+            onClick={() => setShowNoCredits(false)}
             className="w-full mt-4 text-muted-foreground"
           >
             Go back
           </Button>
         </div>
-        
+
         {/* Credits Pricing Modal */}
         <CreditsPricingModal
           open={showPricing}
@@ -276,15 +276,18 @@ const Analyze = () => {
   return (
     <div className="min-h-screen gradient-warm">
       {/* Check iOS subscription status on app launch */}
-      <IAPSubscriptionChecker 
-        userId={user?.id ?? null} 
+      <IAPSubscriptionChecker
+        userId={user?.id ?? null}
         onStatusChecked={() => {
           credits.refetch();
         }}
       />
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+      <header
+        className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-primary-foreground" />
@@ -292,7 +295,7 @@ const Analyze = () => {
             <span className="font-display text-xl font-semibold text-foreground">Styloren</span>
           </div>
           <div className="flex items-center gap-2">
-            <CreditsDisplay 
+            <CreditsDisplay
               creditsRemaining={credits.creditsRemaining}
               isExpired={credits.isExpired}
               activeBatches={credits.getActiveBatches()}
@@ -330,8 +333,8 @@ const Analyze = () => {
               {!credits.canUseCredit() && (
                 <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
                   <p className="text-destructive font-semibold mb-2">
-                    {credits.isExpired 
-                      ? "Your credits have expired!" 
+                    {credits.isExpired
+                      ? "Your credits have expired!"
                       : "Oh no! Looks like you've used all your credits!"}
                   </p>
                   <p className="text-sm text-muted-foreground mb-3">
@@ -347,11 +350,10 @@ const Analyze = () => {
                 {/* Upload from gallery */}
                 <label
                   htmlFor="image-upload"
-                  className={`flex-1 flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-xl transition-all duration-300 ${
-                    credits.canUseCredit()
+                  className={`flex-1 flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-xl transition-all duration-300 ${credits.canUseCredit()
                       ? "border-border/50 cursor-pointer hover:border-primary/50 hover:bg-primary/5"
                       : "border-muted cursor-not-allowed opacity-50"
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -378,11 +380,10 @@ const Analyze = () => {
                 {/* Take a photo with camera */}
                 <label
                   htmlFor="camera-capture"
-                  className={`flex-1 flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-xl transition-all duration-300 ${
-                    credits.canUseCredit()
+                  className={`flex-1 flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-xl transition-all duration-300 ${credits.canUseCredit()
                       ? "border-border/50 cursor-pointer hover:border-primary/50 hover:bg-primary/5"
                       : "border-muted cursor-not-allowed opacity-50"
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
