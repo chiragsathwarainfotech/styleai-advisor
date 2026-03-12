@@ -21,29 +21,35 @@ import { User } from "lucide-react";
 const queryClient = new QueryClient();
 
 const App = () => {
-  useEffect(() => {
-    async function initRevenueCat() {
-      if (
-        Capacitor.isNativePlatform() &&
-        (Capacitor.getPlatform() === "android" ||
-          Capacitor.getPlatform() === "ios")
-      ) {
-        try {
-          console.log("Initializing RevenueCat");
+useEffect(() => {
+  async function initRevenueCat() {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        console.log("Initializing RevenueCat");
 
-          await Purchases.configure({
-            apiKey: "goog_AOXyYHWMVxNshsjHtHOTleuuysM"
-          });
+        const platform = Capacitor.getPlatform();
 
-          console.log("RevenueCat configured successfully");
-        } catch (error) {
-          console.error("RevenueCat init error:", error);
+        let apiKey = "";
+
+        if (platform === "android") {
+          apiKey = "goog_AOXyYHWMVxNshsjHtHOTleuuysM";
+        } else if (platform === "ios") {
+          apiKey = "appl_cRDLefGebMAITzuQjHnFmmqqKlU";
         }
+
+        await Purchases.configure({
+          apiKey: apiKey,
+        });
+
+        console.log("RevenueCat configured successfully for:", platform);
+      } catch (error) {
+        console.error("RevenueCat init error:", error);
       }
     }
+  }
 
-    initRevenueCat();
-  }, []);
+  initRevenueCat();
+}, []);
 
   return (
     <QueryClientProvider client={queryClient}>
