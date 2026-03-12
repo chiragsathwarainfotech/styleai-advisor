@@ -46,30 +46,55 @@ export function CreditsPricingModal({
 
       console.log("Capacitor platform:", Capacitor.getPlatform());
       console.log("Is native:", Capacitor.isNativePlatform());
-      const offerings = await Purchases.getOfferings();
-      const currentOffering = offerings.current;
-      if (!currentOffering) {
-        throw new Error("No offerings available. Please try again later.");
+
+      let purchaseSuccess = false;
+
+      try {
+        const offerings = await Purchases.getOfferings();
+        const currentOffering = offerings.current;
+
+        if (!currentOffering) {
+          throw new Error("No offerings available from RevenueCat.");
+        }
+
+        const pkg = currentOffering.availablePackages.find(
+          (p) => p.product.identifier === plan.productId
+        );
+
+        if (!pkg) {
+          throw new Error("Product not found in RevenueCat offerings.");
+        }
+
+        const { customerInfo } = await Purchases.purchasePackage({
+          aPackage: pkg,
+        });
+
+        if (customerInfo) {
+          purchaseSuccess = true;
+        }
+      } catch (iapError: any) {
+        console.warn("Native IAP failed, checking for DEV fallback:", iapError);
+
+        // In physical device production, we should stop here
+        // But in DEV mode/Simulator, we can fall back to local data as requested
+        if (import.meta.env.DEV) {
+          console.log("Falling back to local simulation in DEV mode");
+          purchaseSuccess = true;
+        } else {
+          throw iapError;
+        }
       }
 
-      const pkg = currentOffering.availablePackages.find(
-        (p) => p.product.identifier === plan.productId
-      );
-      if (!pkg) {
-        throw new Error("Product not found. Please try again later.");
-      }
-
-      const { customerInfo } = await Purchases.purchasePackage({
-        aPackage: pkg,
-      });
-      if (customerInfo) {
-        // Payment succeeded — now grant credits
+      if (purchaseSuccess) {
+        // Payment succeeded (or was simulated) — now grant credits
         const success = await onPlanPurchased(plan);
 
         if (success) {
           toast({
-            title: "Purchase Successful! 🎉",
-            description: `You've added ${plan.credits} credits to your account!`,
+            title: import.meta.env.DEV ? "Simulated Purchase Successful! 🎉" : "Purchase Successful! 🎉",
+            description: import.meta.env.DEV
+              ? `(Dev Mode) Successfully added ${plan.credits} credits to your account!`
+              : `You've added ${plan.credits} credits to your account!`,
           });
           onOpenChange(false);
         } else {
