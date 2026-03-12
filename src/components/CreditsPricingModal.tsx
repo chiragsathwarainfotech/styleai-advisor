@@ -19,7 +19,6 @@ export function CreditsPricingModal({
   userId,
   onPlanPurchased
 }: CreditsPricingModalProps) {
-  console.log("CreditsPricingModal render: open=", open, "userId=", userId);
   const [loading, setLoading] = useState<string | null>(null);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const { toast } = useToast();
@@ -48,22 +47,31 @@ export function CreditsPricingModal({
       console.log("Capacitor platform:", Capacitor.getPlatform());
       console.log("Is native:", Capacitor.isNativePlatform());
 
-      let purchaseSuccess = false;
-
       try {
         const offerings = await Purchases.getOfferings();
-        const currentOffering = offerings.current;
+        let pkg = null;
 
-        if (!currentOffering) {
-          throw new Error("No offerings available from RevenueCat.");
+        // Try current offering first
+        if (offerings.current) {
+          pkg = offerings.current.availablePackages.find(
+            (p) => p.product.identifier === plan.productId
+          );
         }
 
-        const pkg = currentOffering.availablePackages.find(
-          (p) => p.product.identifier === plan.productId
-        );
+        // If not in current, search all offerings
+        if (!pkg && offerings.all) {
+          for (const offeringId in offerings.all) {
+            const offering = offerings.all[offeringId];
+            pkg = offering.availablePackages.find(
+              (p) => p.product.identifier === plan.productId
+            );
+            if (pkg) break;
+          }
+        }
 
         if (!pkg) {
-          throw new Error("Product not found in RevenueCat offerings.");
+          console.error("Available offerings:", offerings);
+          throw new Error("Product not found in any RevenueCat offerings. Please check your Dashboard or StoreKit configuration.");
         }
 
         const { customerInfo } = await Purchases.purchasePackage({
@@ -71,47 +79,26 @@ export function CreditsPricingModal({
         });
 
         if (customerInfo) {
-          purchaseSuccess = true;
+          // Payment succeeded — now grant credits
+          const success = await onPlanPurchased(plan);
+
+          if (success) {
+            toast({
+              title: "Purchase Successful! 🎉",
+              description: `You've added ${plan.credits} credits to your account!`,
+            });
+            onOpenChange(false);
+          } else {
+            toast({
+              title: "Credits Error",
+              description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
+              variant: "destructive",
+            });
+          }
         }
       } catch (iapError: any) {
-        console.warn("Native IAP failed:", iapError);
-
-        // Check if the error is a configuration issue or empty offerings
-        // This is common in simulators or when App Store Connect setup is pending
-        const isConfigError = iapError.message?.includes("configuration") ||
-          iapError.message?.includes("offerings") ||
-          iapError.message?.includes("products");
-
-        // Allow fallback if it's a dev build OR if we explicitly want to allow testing on simulator
-        if (import.meta.env.DEV || isConfigError) {
-          console.log("Falling back to local simulation because of configuration/offering error");
-          purchaseSuccess = true;
-          // We mark it as simulated to alert the dev in the UI
-          (plan as any).isSimulated = true;
-        } else {
-          throw iapError;
-        }
-      }
-
-      if (purchaseSuccess) {
-        // Payment succeeded (or was simulated) — now grant credits
-        const success = await onPlanPurchased(plan);
-
-        if (success) {
-          toast({
-            title: import.meta.env.DEV ? "Simulated Purchase Successful! 🎉" : "Purchase Successful! 🎉",
-            description: import.meta.env.DEV
-              ? `(Dev Mode) Successfully added ${plan.credits} credits to your account!`
-              : `You've added ${plan.credits} credits to your account!`,
-          });
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Credits Error",
-            description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
-            variant: "destructive",
-          });
-        }
+        console.error("IAP Error inside try-catch:", iapError);
+        throw iapError;
       }
     } catch (error: any) {
       // User cancelled or IAP error

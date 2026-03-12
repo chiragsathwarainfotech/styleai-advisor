@@ -1,0 +1,63 @@
+{
+  "identifier" : "E0A4E2B1",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "49",
+      "familyShareable" : false,
+      "internalID" : "3A0B3C4D",
+      "localizations" : [
+        {
+          "description" : "10 credits to explore Styloren",
+          "displayName" : "Quick Try",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "styloren_quick_try",
+      "referenceName" : "Quick Try",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "199",
+      "familyShareable" : false,
+      "internalID" : "4B1C2D3E",
+      "localizations" : [
+        {
+          "description" : "50 credits for consistent styling",
+          "displayName" : "Monthly Value",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "styloren_monthly_value",
+      "referenceName" : "Monthly Value",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "399",
+      "familyShareable" : false,
+      "internalID" : "5C2D3E4F",
+      "localizations" : [
+        {
+          "description" : "100 credits for serious style planning",
+          "displayName" : "Quarterly Saver",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "styloren_quarterly_saver",
+      "referenceName" : "Quarterly Saver",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}
