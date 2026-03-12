@@ -13,17 +13,17 @@ interface CreditsPricingModalProps {
   onPlanPurchased: (plan: CreditPlan) => Promise<boolean>;
 }
 
-export function CreditsPricingModal({ 
-  open, 
-  onOpenChange, 
-  userId, 
-  onPlanPurchased 
+export function CreditsPricingModal({
+  open,
+  onOpenChange,
+  userId,
+  onPlanPurchased
 }: CreditsPricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const { toast } = useToast();
 
-  const isNativeMobile = Capacitor.isNativePlatform() && 
+  const isNativeMobile = Capacitor.isNativePlatform() &&
     (Capacitor.getPlatform() === "ios" || Capacitor.getPlatform() === "android");
 
   const showNativeAppRequired = !isNativeMobile;
@@ -42,41 +42,63 @@ export function CreditsPricingModal({
 
     try {
       // Use native IAP via RevenueCat to process payment
-    const { Purchases } = await import("@revenuecat/purchases-capacitor");
+      const { Purchases } = await import("@revenuecat/purchases-capacitor");
 
-const offerings = await Purchases.getOfferings();
-      const currentOffering = offerings.current;
-      if (!currentOffering) {
-        throw new Error("No offerings available. Please try again later.");
-      }
+      console.log("Capacitor platform:", Capacitor.getPlatform());
+      console.log("Is native:", Capacitor.isNativePlatform());
 
-      const pkg = currentOffering.availablePackages.find(
-        (p) => p.product.identifier === plan.productId
-      );
-      if (!pkg) {
-        throw new Error("Product not found. Please try again later.");
-      }
+      try {
+        const offerings = await Purchases.getOfferings();
+        let pkg = null;
 
-      const { customerInfo } = await Purchases.purchasePackage({
-  aPackage: pkg,
-});
-      if (customerInfo) {
-        // Payment succeeded — now grant credits
-        const success = await onPlanPurchased(plan);
-        
-        if (success) {
-          toast({
-            title: "Purchase Successful! 🎉",
-            description: `You've added ${plan.credits} credits to your account!`,
-          });
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Credits Error",
-            description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
-            variant: "destructive",
-          });
+        // Try current offering first
+        if (offerings.current) {
+          pkg = offerings.current.availablePackages.find(
+            (p) => p.product.identifier === plan.productId
+          );
         }
+
+        // If not in current, search all offerings
+        if (!pkg && offerings.all) {
+          for (const offeringId in offerings.all) {
+            const offering = offerings.all[offeringId];
+            pkg = offering.availablePackages.find(
+              (p) => p.product.identifier === plan.productId
+            );
+            if (pkg) break;
+          }
+        }
+
+        if (!pkg) {
+          console.error("Available offerings:", offerings);
+          throw new Error("Product not found in any RevenueCat offerings. Please check your Dashboard or StoreKit configuration.");
+        }
+
+        const { customerInfo } = await Purchases.purchasePackage({
+          aPackage: pkg,
+        });
+
+        if (customerInfo) {
+          // Payment succeeded — now grant credits
+          const success = await onPlanPurchased(plan);
+
+          if (success) {
+            toast({
+              title: "Purchase Successful! 🎉",
+              description: `You've added ${plan.credits} credits to your account!`,
+            });
+            onOpenChange(false);
+          } else {
+            toast({
+              title: "Credits Error",
+              description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (iapError: any) {
+        console.error("IAP Error inside try-catch:", iapError);
+        throw iapError;
       }
     } catch (error: any) {
       // User cancelled or IAP error
@@ -108,8 +130,8 @@ const offerings = await Purchases.getOfferings();
 
     setRestoringPurchases(true);
     try {
-     const { Purchases } = await import("@revenuecat/purchases-capacitor");
-const customerInfo = await Purchases.restorePurchases();
+      const { Purchases } = await import("@revenuecat/purchases-capacitor");
+      const customerInfo = await Purchases.restorePurchases();
 
       if (customerInfo) {
         toast({
@@ -161,7 +183,7 @@ const customerInfo = await Purchases.restorePurchases();
               <div>
                 <p className="font-semibold text-foreground text-sm">Download the App to Purchase</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  In-App Purchases are available exclusively through the Styloren mobile app. 
+                  In-App Purchases are available exclusively through the Styloren mobile app.
                   Download from the App Store or Google Play to get credits.
                 </p>
               </div>
@@ -173,18 +195,17 @@ const customerInfo = await Purchases.restorePurchases();
           {CREDIT_PLANS.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-xl p-5 border-2 transition-all ${
-                plan.highlight
-                  ? "border-primary bg-primary/5 shadow-soft"
-                  : "border-border hover:border-primary/50"
-              }`}
+              className={`relative rounded-xl p-5 border-2 transition-all ${plan.highlight
+                ? "border-primary bg-primary/5 shadow-soft"
+                : "border-border hover:border-primary/50"
+                }`}
             >
               {plan.highlight && (
                 <div className="absolute -top-3 left-4 px-3 py-1 rounded-full gradient-primary text-xs font-semibold text-primary-foreground">
                   Best Value
                 </div>
               )}
-              
+
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="font-display font-semibold text-foreground text-lg">
@@ -205,11 +226,11 @@ const customerInfo = await Purchases.restorePurchases();
               <ul className="space-y-2 mb-4">
                 <li className="flex items-center gap-2 text-sm text-foreground/80">
                   <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  {plan.id === "monthly_value" 
-                    ? "50 credits for consistent styling" 
-                    : plan.id === "quarterly_saver" 
-                    ? "100 credits for serious style planning" 
-                    : `${plan.credits} credits to explore Styloren`}
+                  {plan.id === "monthly_value"
+                    ? "50 credits for consistent styling"
+                    : plan.id === "quarterly_saver"
+                      ? "100 credits for serious style planning"
+                      : `${plan.credits} credits to explore Styloren`}
                 </li>
                 <li className="flex items-center gap-2 text-sm text-foreground/80">
                   <Check className="w-4 h-4 text-primary flex-shrink-0" />

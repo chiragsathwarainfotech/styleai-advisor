@@ -13,32 +13,68 @@ import ScanHistory from "./pages/ScanHistory";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
+import { Capacitor } from "@capacitor/core";
+import { Purchases } from "@revenuecat/purchases-capacitor";
+import { useEffect } from "react";
+import { User } from "lucide-react";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/analyze" element={<Analyze />} />
-              <Route path="/account" element={<Account />} />
-              <Route path="/scan-history" element={<ScanHistory />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/terms-conditions" element={<TermsConditions />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+useEffect(() => {
+  async function initRevenueCat() {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        console.log("Initializing RevenueCat");
+
+        const platform = Capacitor.getPlatform();
+
+        let apiKey = "";
+
+        if (platform === "android") {
+          apiKey = "goog_AOXyYHWMVxNshsjHtHOTleuuysM";
+        } else if (platform === "ios") {
+          apiKey = "appl_cRDLefGebMAITzuQjHnFmmqqKlU";
+        }
+
+        await Purchases.configure({
+          apiKey: apiKey,
+        });
+
+        console.log("RevenueCat configured successfully for:", platform);
+      } catch (error) {
+        console.error("RevenueCat init error:", error);
+      }
+    }
+  }
+
+  initRevenueCat();
+}, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/analyze" element={<Analyze />} />
+                <Route path="/account" element={<Account />} />
+                <Route path="/scan-history" element={<ScanHistory />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms-conditions" element={<TermsConditions />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

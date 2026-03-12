@@ -8,8 +8,11 @@ const TermsConditions = () => {
   return (
     <div className="min-h-screen gradient-warm">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center gap-3">
+      <header
+        className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -30,7 +33,7 @@ const TermsConditions = () => {
           <div className="prose prose-sm max-w-none text-foreground">
             <h1 className="font-display text-2xl font-bold text-foreground mb-2">Terms & Conditions – Styloren</h1>
             <p className="text-muted-foreground mb-6">Last updated: December 18, 2025</p>
-            
+
             <p className="text-foreground mb-6">
               Welcome to Styloren. By accessing or using the Styloren mobile application ("App"), you agree to comply with and be bound by these Terms & Conditions ("Terms"). If you do not agree, please do not use the App.
             </p>

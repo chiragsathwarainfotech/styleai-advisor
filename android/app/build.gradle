@@ -1,13 +1,25 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 android {
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+
     namespace "app.lovable.styleai"
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    compileSdkVersion 35
     defaultConfig {
         applicationId "app.lovable.styleai"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        minSdkVersion 22
+        targetSdkVersion 35
+        versionCode 9
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -40,6 +52,8 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 //    implementation project(':capacitor-cordova-android-plugins')
+    implementation "com.android.billingclient:billing:6.1.0"
+//    implementation "com.revenuecat.purchases:purchases:9.22.2"
 }
 
 apply from: 'capacitor.build.gradle'

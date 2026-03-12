@@ -52,7 +52,7 @@ const ScanHistory = () => {
 
   const credits = useCredits(user?.id);
   const hasCredits = credits.creditsRemaining > 0 && !credits.isExpired;
-  
+
   const {
     scans,
     lockedScans,
@@ -65,12 +65,12 @@ const ScanHistory = () => {
 
   const handleDeleteConfirm = async () => {
     if (!scanToDelete) return;
-    
+
     setIsDeleting(true);
     const success = await deleteScan(scanToDelete);
     setIsDeleting(false);
     setScanToDelete(null);
-    
+
     if (success) {
       toast({ title: "Scan deleted", description: "The scan has been permanently removed from your history." });
     } else {
@@ -95,8 +95,11 @@ const ScanHistory = () => {
   return (
     <div className="min-h-screen gradient-warm">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+      <header
+        className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -122,7 +125,7 @@ const ScanHistory = () => {
           <div className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/20">
             <p className="text-sm text-foreground">
               <Sparkles className="w-4 h-4 inline mr-2 text-primary" />
-              Free users can view their last {FREE_HISTORY_LIMIT} scans. 
+              Free users can view their last {FREE_HISTORY_LIMIT} scans.
               <button onClick={handleGetCredits} className="text-primary font-semibold ml-1 hover:underline">
                 Get credits</button>
               {" "}to unlock unlimited history.
@@ -171,7 +174,7 @@ const ScanHistory = () => {
                   outfitCategory={scan.outfit_category}
                   styleScore={scan.style_score}
                   isLocked={true}
-                  onView={() => {}}
+                  onView={() => { }}
                   onUpgrade={handleGetCredits}
                 />
               ))}
