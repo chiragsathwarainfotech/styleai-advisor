@@ -1,2 +1,5 @@
 /build/*
 !/build/.npmkeep
+
+# Ignore gradle properties
+gradle.properties
