@@ -29,3 +29,13 @@ dist-ssr
 !android/**
 android/gradle.properties
 android/local.properties
+
+# --- ALLOW IOS FILES ---
+!ios/
+!ios/**
+ios/DerivedData/
+ios/App/App/public/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/App/App/config.xml
+ios/App/App/capacitor.config.json
