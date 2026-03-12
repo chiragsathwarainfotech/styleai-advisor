@@ -27,3 +27,5 @@ dist-ssr
 # --- ALLOW ANDROID FILES ---
 !android/
 !android/**
+android/gradle.properties
+android/local.properties
