@@ -36,6 +36,7 @@ export function CreditsDisplay({
       {/* Main credits button */}
       <button
         onClick={() => {
+          console.log("CreditsDisplay clicked: hasCredits=", hasCredits, "activeBatches=", activeBatches.length);
           if (hasCredits && activeBatches.length > 0) {
             setOpen(!open);
           } else {

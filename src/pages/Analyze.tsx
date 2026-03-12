@@ -73,6 +73,7 @@ const Analyze = () => {
   };
 
   const handleGetCredits = () => {
+    console.log("handleGetCredits triggered: showing pricing modal");
     setShowPricing(true);
     setShowNoCredits(false);
   };
