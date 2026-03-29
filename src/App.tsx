@@ -18,11 +18,14 @@ import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 import { useEffect } from "react";
 import { User } from "lucide-react";
 
+import { NotificationService } from "@/lib/NotificationService";
+
 const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    async function initRevenueCat() {
+    async function initApp() {
+      // Initialize RevenueCat
       if (Capacitor.isNativePlatform()) {
         try {
           const platform = Capacitor.getPlatform();
@@ -53,10 +56,18 @@ const App = () => {
         } catch (error) {
           console.error("RevenueCat init error:", error);
         }
+
+        // Initialize Notifications
+        try {
+          await NotificationService.init();
+          console.log("NotificationService initialized successfully");
+        } catch (error) {
+          console.error("NotificationService init error:", error);
+        }
       }
     }
 
-    initRevenueCat();
+    initApp();
   }, []);
 
   return (
