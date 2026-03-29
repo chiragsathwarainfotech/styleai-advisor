@@ -321,6 +321,21 @@ const Auth = () => {
               terms_accepted: true,
               terms_accepted_timestamp: new Date().toISOString(),
             }, { onConflict: 'user_id' });
+
+          // Give 5 free credits to new users
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 365); // 1 year validity
+
+          await supabase
+            .from("credit_purchases")
+            .insert({
+              user_id: newUser.id,
+              credits_total: 5,
+              credits_used: 0,
+              purchased_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+              plan_name: "Welcome Bonus",
+            });
         }
         
         toast({
