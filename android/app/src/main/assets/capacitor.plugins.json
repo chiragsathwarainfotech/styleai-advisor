@@ -1,5 +1,13 @@
 [
 	{
+		"pkg": "@capacitor/camera",
+		"classpath": "com.capacitorjs.plugins.camera.CameraPlugin"
+	},
+	{
+		"pkg": "@capacitor/push-notifications",
+		"classpath": "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin"
+	},
+	{
 		"pkg": "@revenuecat/purchases-capacitor",
 		"classpath": "com.revenuecat.purchases.capacitor.PurchasesPlugin"
 	}

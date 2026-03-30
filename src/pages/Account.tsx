@@ -92,8 +92,8 @@ const Account = () => {
     if (success) {
       toast({
         title: enabled ? "Scan history enabled" : "Scan history disabled",
-        description: enabled 
-          ? "Future scans will be saved to your history." 
+        description: enabled
+          ? "Future scans will be saved to your history."
           : "Future scans will not be saved. Existing history is unchanged.",
       });
     } else {
@@ -110,7 +110,7 @@ const Account = () => {
     const success = await deleteAllScans();
     setIsDeletingAll(false);
     setShowDeleteAllDialog(false);
-    
+
     if (success) {
       toast({
         title: "All scans deleted",
@@ -258,8 +258,8 @@ const Account = () => {
               </p>
               <p className="text-sm text-muted-foreground">
                 Email us at{" "}
-                <a 
-                  href="mailto:help@styloren.com" 
+                <a
+                  href="mailto:help@styloren.com"
                   className="text-primary underline"
                 >
                   help@styloren.com
@@ -295,8 +295,11 @@ const Account = () => {
   return (
     <div className="min-h-screen gradient-warm">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+      <header
+        className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -328,11 +331,10 @@ const Account = () => {
                 {credits.displayName || "Styloren User"}
               </h2>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  hasCredits 
-                    ? "bg-primary/20 text-primary" 
-                    : "bg-muted text-muted-foreground"
-                }`}>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${hasCredits
+                  ? "bg-primary/20 text-primary"
+                  : "bg-muted text-muted-foreground"
+                  }`}>
                   <Sparkles className="w-3 h-3" />
                   {getCreditsLabel()}
                 </span>
@@ -406,11 +408,10 @@ const Account = () => {
                       <button
                         onClick={item.onClick}
                         disabled={!item.onClick || item.disabled}
-                        className={`w-full flex items-center gap-3 text-left transition-colors ${
-                          item.onClick && !item.disabled
-                            ? "hover:bg-muted/50 cursor-pointer"
-                            : "cursor-default opacity-50"
-                        } ${item.destructive ? "text-destructive" : "text-foreground"}`}
+                        className={`w-full flex items-center gap-3 text-left transition-colors ${item.onClick && !item.disabled
+                          ? "hover:bg-muted/50 cursor-pointer"
+                          : "cursor-default opacity-50"
+                          } ${item.destructive ? "text-destructive" : "text-foreground"}`}
                       >
                         <item.icon className={`w-5 h-5 ${item.destructive ? "text-destructive" : "text-muted-foreground"}`} />
                         <span className="flex-1 font-body">{item.label}</span>
@@ -490,7 +491,7 @@ const Account = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Delete All Scan History?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all your saved scans ({totalCount} scan{totalCount !== 1 ? 's' : ''}). 
+              This will permanently delete all your saved scans ({totalCount} scan{totalCount !== 1 ? 's' : ''}).
               Your outfit photos and analysis data will be removed forever. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

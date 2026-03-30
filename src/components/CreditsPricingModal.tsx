@@ -46,39 +46,59 @@ export function CreditsPricingModal({
 
       console.log("Capacitor platform:", Capacitor.getPlatform());
       console.log("Is native:", Capacitor.isNativePlatform());
-      const offerings = await Purchases.getOfferings();
-      const currentOffering = offerings.current;
-      if (!currentOffering) {
-        throw new Error("No offerings available. Please try again later.");
-      }
 
-      const pkg = currentOffering.availablePackages.find(
-        (p) => p.product.identifier === plan.productId
-      );
-      if (!pkg) {
-        throw new Error("Product not found. Please try again later.");
-      }
+      try {
+        const offerings = await Purchases.getOfferings();
+        let pkg = null;
 
-      const { customerInfo } = await Purchases.purchasePackage({
-        aPackage: pkg,
-      });
-      if (customerInfo) {
-        // Payment succeeded — now grant credits
-        const success = await onPlanPurchased(plan);
-
-        if (success) {
-          toast({
-            title: "Purchase Successful! 🎉",
-            description: `You've added ${plan.credits} credits to your account!`,
-          });
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Credits Error",
-            description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
-            variant: "destructive",
-          });
+        // Try current offering first
+        if (offerings.current) {
+          pkg = offerings.current.availablePackages.find(
+            (p) => p.product.identifier === plan.productId
+          );
         }
+
+        // If not in current, search all offerings
+        if (!pkg && offerings.all) {
+          for (const offeringId in offerings.all) {
+            const offering = offerings.all[offeringId];
+            pkg = offering.availablePackages.find(
+              (p) => p.product.identifier === plan.productId
+            );
+            if (pkg) break;
+          }
+        }
+
+        if (!pkg) {
+          console.error("Available offerings:", offerings);
+          throw new Error("Product not found in any RevenueCat offerings. Please check your Dashboard or StoreKit configuration.");
+        }
+
+        const { customerInfo } = await Purchases.purchasePackage({
+          aPackage: pkg,
+        });
+
+        if (customerInfo) {
+          // Payment succeeded — now grant credits
+          const success = await onPlanPurchased(plan);
+
+          if (success) {
+            toast({
+              title: "Purchase Successful! 🎉",
+              description: `You've added ${plan.credits} credits to your account!`,
+            });
+            onOpenChange(false);
+          } else {
+            toast({
+              title: "Credits Error",
+              description: "Payment was successful but credits could not be added. Please use Restore Purchases or contact support.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (iapError: any) {
+        console.error("IAP Error inside try-catch:", iapError);
+        throw iapError;
       }
     } catch (error: any) {
       // User cancelled or IAP error

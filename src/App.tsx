@@ -14,36 +14,65 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
 import { Capacitor } from "@capacitor/core";
-import { Purchases } from "@revenuecat/purchases-capacitor";
+import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 import { useEffect } from "react";
 import { User } from "lucide-react";
+
+import { NotificationService } from "@/lib/NotificationService";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-  async function initRevenueCat() {
-    if (
-      Capacitor.isNativePlatform() &&
-      (Capacitor.getPlatform() === "android" ||
-       Capacitor.getPlatform() === "ios")
-    ) {
-      try {
-        console.log("Initializing RevenueCat");
-        
-        await Purchases.configure({
-          apiKey: "test_dcpunFsYSVMqwTpHJzaeQPXBUhE"
-        });
+    async function initApp() {
+      // Initialize RevenueCat
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const platform = Capacitor.getPlatform();
+          console.log(`[Diagnostic] Platform: ${platform}`);
 
-        console.log("RevenueCat configured successfully");
-      } catch (error) {
-        console.error("RevenueCat init error:", error);
+          await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+          console.log("[Diagnostic] RevenueCat Log Level set to DEBUG");
+
+          let apiKey = "";
+          if (platform === "android") {
+            apiKey = "goog_AOXyYHWMVxNshsjHtHOTleuuysM";
+          } else if (platform === "ios") {
+            apiKey = "appl_cRDLefGebMAITzuQjHnFmmqqKlU";
+          }
+
+          console.log(`[Diagnostic] Using API Key: ${apiKey.substring(0, 10)}...`);
+
+          await Purchases.configure({
+            apiKey: apiKey,
+          });
+
+          console.log("RevenueCat configured successfully for:", platform);
+
+          // Test fetch to see if any products are reachable
+          const offerings = await Purchases.getOfferings();
+          console.log("[Diagnostic] Current Offering:", offerings.current?.identifier || "None");
+          console.log("[Diagnostic] Available Offerings:", Object.keys(offerings.all));
+        } catch (error) {
+          console.error("RevenueCat init error:", error);
+        }
+
+        // Initialize Notifications
+        try {
+          console.log("[Diagnostic] Initializing NotificationService...");
+          await NotificationService.init();
+          console.log("NotificationService initialized successfully");
+        } catch (error) {
+          console.error("NotificationService init error (Caught in App.tsx):", error);
+        }
+
+
+
       }
     }
-  }
 
-  initRevenueCat();
-}, []);
+    initApp();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

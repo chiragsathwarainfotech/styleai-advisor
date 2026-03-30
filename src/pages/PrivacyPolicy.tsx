@@ -8,8 +8,11 @@ const PrivacyPolicy = () => {
   return (
     <div className="min-h-screen gradient-warm">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center gap-3">
+      <header
+        className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -42,7 +45,7 @@ const PrivacyPolicy = () => {
             <section>
               <h2 className="font-display text-lg font-semibold mb-3">1. Information We Collect</h2>
               <p className="mb-3">When you use Styloren, we may collect the following information:</p>
-              
+
               <h3 className="font-semibold mb-2">a) Information You Provide</h3>
               <ul className="list-disc list-inside space-y-1 mb-3 text-muted-foreground">
                 <li>Email address or login information</li>
@@ -145,8 +148,8 @@ const PrivacyPolicy = () => {
               </p>
               <p className="mt-2">
                 📧{" "}
-                <a 
-                  href="mailto:help@styloren.com" 
+                <a
+                  href="mailto:help@styloren.com"
                   className="text-primary underline"
                 >
                   help@styloren.com
