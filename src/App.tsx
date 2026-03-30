@@ -59,11 +59,15 @@ const App = () => {
 
         // Initialize Notifications
         try {
+          console.log("[Diagnostic] Initializing NotificationService...");
           await NotificationService.init();
           console.log("NotificationService initialized successfully");
         } catch (error) {
-          console.error("NotificationService init error:", error);
+          console.error("NotificationService init error (Caught in App.tsx):", error);
         }
+
+
+
       }
     }
 

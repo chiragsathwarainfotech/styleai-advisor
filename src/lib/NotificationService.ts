@@ -4,8 +4,12 @@ import { Capacitor } from '@capacitor/core';
 export const NotificationService = {
   async init() {
     if (Capacitor.isNativePlatform()) {
-      await this.addListeners();
-      await this.registerNotifications();
+      try {
+        await this.addListeners();
+        await this.registerNotifications();
+      } catch (e) {
+        console.error('NotificationService init failed:', e);
+      }
     }
   },
 
@@ -38,7 +42,13 @@ export const NotificationService = {
       throw new Error('User denied permissions!');
     }
 
-    await PushNotifications.register();
+    try {
+      await PushNotifications.register();
+    } catch (e) {
+      console.error('Failed to register push notifications. This is likely due to missing google-services.json or Google Play Services.', e);
+      // We don't rethrow here to prevent crashing the app boot
+    }
+
   },
 
   async getDeliveredNotifications() {

@@ -340,8 +340,9 @@ const Auth = () => {
         
         toast({
           title: "Account created!",
-          description: "Welcome to Styloren.",
+          description: "Congratulations!! You have got 5 FREE credits as a signing up bonus!!",
         });
+
       }
     } catch (error: any) {
       let message = error.message;
