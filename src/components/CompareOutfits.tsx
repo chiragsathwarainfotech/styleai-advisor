@@ -2,7 +2,10 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Images, X, Loader2, Sparkles, Plus, Lock, Camera } from "lucide-react";
+import { Images, X, Loader2, Sparkles, Plus, Lock, Camera as CameraIcon } from "lucide-react";
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+
 import ReactMarkdown from "react-markdown";
 
 interface CompareOutfitsProps {
@@ -77,6 +80,45 @@ export function CompareOutfits({
       fileInputRef.current.value = "";
     }
   };
+
+  const handleTakePhoto = async () => {
+    if (images.length >= photoLimit) return;
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const image = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Camera
+        });
+
+        if (image.base64String) {
+          const base64 = `data:image/${image.format};base64,${image.base64String}`;
+          setImages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), preview: base64, base64 },
+          ]);
+        }
+      } else {
+        // Fallback for browser if needed, but standard input usually works there
+        toast({
+          title: "Browser detected",
+          description: "Please use the 'Add photo' option in the browser.",
+        });
+      }
+    } catch (error: any) {
+      console.error('Camera error:', error);
+      if (error.message !== 'User cancelled photos app') {
+        toast({
+          title: "Camera error",
+          description: "Could not open camera. Please check permissions.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
 
   const removeImage = (id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
@@ -242,22 +284,14 @@ export function CompareOutfits({
                 multiple
               />
             </label>
-            <label
-              htmlFor="compare-capture"
+            <div
+              onClick={handleTakePhoto}
               className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
             >
-              <Camera className="w-8 h-8 text-muted-foreground mb-1" />
+              <CameraIcon className="w-8 h-8 text-muted-foreground mb-1" />
               <span className="text-xs text-muted-foreground">Take photo</span>
-              <input
-                id="compare-capture"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                className="hidden"
-                multiple
-              />
-            </label>
+            </div>
+
           </>
         )}
       </div>
