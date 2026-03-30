@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Images, X, Loader2, Sparkles, Plus, Lock } from "lucide-react";
+import { Images, X, Loader2, Sparkles, Plus, Lock, Camera } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface CompareOutfitsProps {
@@ -225,22 +225,40 @@ export function CompareOutfits({
           </div>
         ))}
         {images.length < photoLimit && (
-          <label
-            htmlFor="compare-upload"
-            className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
-          >
-            <Plus className="w-8 h-8 text-muted-foreground mb-1" />
-            <span className="text-xs text-muted-foreground">Add photo</span>
-            <input
-              ref={fileInputRef}
-              id="compare-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-            />
-          </label>
+          <>
+            <label
+              htmlFor="compare-upload"
+              className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            >
+              <Plus className="w-8 h-8 text-muted-foreground mb-1" />
+              <span className="text-xs text-muted-foreground">Add photo</span>
+              <input
+                ref={fileInputRef}
+                id="compare-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+            </label>
+            <label
+              htmlFor="compare-capture"
+              className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            >
+              <Camera className="w-8 h-8 text-muted-foreground mb-1" />
+              <span className="text-xs text-muted-foreground">Take photo</span>
+              <input
+                id="compare-capture"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+            </label>
+          </>
         )}
       </div>
 
