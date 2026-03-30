@@ -1,5 +1,5 @@
 {
-  "appId": "com.styloren.app",
+  "appId": "app.lovable.styleai",
   "appName": "Styloren",
   "webDir": "dist",
   "server": {
@@ -8,5 +8,10 @@
   "ios": {
     "contentInset": "never"
   },
-  "plugins": {}
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+
 }

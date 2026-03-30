@@ -16,11 +16,16 @@ export const NotificationService = {
   async addListeners() {
     await PushNotifications.addListener('registration', token => {
       console.info('Push registration success, token: ' + token.value);
+      // For verification purposes, show a visual sign
+      // window.alert('Push registration successful!');
     });
 
     await PushNotifications.addListener('registrationError', err => {
       console.error('Push registration error: ', err.error);
+      // window.alert('Push registration failed. See console.');
     });
+
+
 
     await PushNotifications.addListener('pushNotificationReceived', notification => {
       console.info('Push notification received: ', notification);
