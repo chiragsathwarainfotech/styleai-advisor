@@ -86,6 +86,17 @@ export function CompareOutfits({
 
     try {
       if (Capacitor.isNativePlatform()) {
+        // First check permissions
+        const permissions = await Camera.checkPermissions();
+        if (permissions.camera === 'denied') {
+          toast({
+            title: "Camera Permission Denied",
+            description: "Please enable camera access in your device settings to take photos.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const image = await Camera.getPhoto({
           quality: 90,
           allowEditing: false,
@@ -101,7 +112,6 @@ export function CompareOutfits({
           ]);
         }
       } else {
-        // Fallback for browser if needed, but standard input usually works there
         toast({
           title: "Browser detected",
           description: "Please use the 'Add photo' option in the browser.",
@@ -109,10 +119,18 @@ export function CompareOutfits({
       }
     } catch (error: any) {
       console.error('Camera error:', error);
-      if (error.message !== 'User cancelled photos app') {
+      
+      // Handle the specific case where hardware is missing (Simulator)
+      if (error.message?.includes('Camera usage is not possible') || error.message?.includes('hardware')) {
+        toast({
+          title: "Camera Unavailable",
+          description: "The camera is not available on this device (Simulator). Please use 'Add photo' to select from your gallery.",
+          variant: "destructive",
+        });
+      } else if (error.message !== 'User cancelled photos app') {
         toast({
           title: "Camera error",
-          description: "Could not open camera. Please check permissions.",
+          description: "Could not open camera. Please check your settings and try again.",
           variant: "destructive",
         });
       }

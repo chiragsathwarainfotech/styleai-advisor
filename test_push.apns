@@ -1,0 +1,14 @@
+{
+  "Simulator Target Bundle": "com.styloren.app",
+  "aps": {
+    "alert": {
+      "title": "Welcome to Styloren!",
+      "body": "This is a simulated push notification directly targeting your iOS Simulator."
+    },
+    "badge": 1,
+    "sound": "default"
+  },
+  "customData": {
+    "targetPage": "profile_page"
+  }
+}

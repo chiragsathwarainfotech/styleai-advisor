@@ -3,12 +3,16 @@ import { Capacitor } from '@capacitor/core';
 
 export const NotificationService = {
   async init() {
+    console.log('[Push Diagnostics] init started, isNative:', Capacitor.isNativePlatform());
     if (Capacitor.isNativePlatform()) {
       try {
+        console.log('[Push Diagnostics] adding listeners...');
         await this.addListeners();
+        console.log('[Push Diagnostics] registering notifications...');
         await this.registerNotifications();
+        console.log('[Push Diagnostics] initialization complete');
       } catch (e) {
-        console.error('NotificationService init failed:', e);
+        console.error('[Push Diagnostics] NotificationService init failed:', e);
       }
     }
   },
@@ -37,23 +41,29 @@ export const NotificationService = {
   },
 
   async registerNotifications() {
+    console.log('[Push Diagnostics] checking permissions...');
     let permStatus = await PushNotifications.checkPermissions();
+    console.log('[Push Diagnostics] initial permStatus:', permStatus);
 
     if (permStatus.receive === 'prompt') {
+      console.log('[Push Diagnostics] prompting for permissions...');
       permStatus = await PushNotifications.requestPermissions();
+      console.log('[Push Diagnostics] new permStatus:', permStatus);
     }
 
     if (permStatus.receive !== 'granted') {
+      console.log('[Push Diagnostics] User denied permissions!');
       throw new Error('User denied permissions!');
     }
 
     try {
+      console.log('[Push Diagnostics] calling PushNotifications.register()...');
       await PushNotifications.register();
+      console.log('[Push Diagnostics] registration call successful!');
     } catch (e) {
-      console.error('Failed to register push notifications. This is likely due to missing google-services.json or Google Play Services.', e);
+      console.error('[Push Diagnostics] Failed to register push notifications:', e);
       // We don't rethrow here to prevent crashing the app boot
     }
-
   },
 
   async getDeliveredNotifications() {
