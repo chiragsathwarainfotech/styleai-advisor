@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Images, X, Loader2, Sparkles, Plus, Lock, Camera as CameraIcon } from "lucide-react";
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-
+import { compressImage } from "@/lib/imageCompression";
 import ReactMarkdown from "react-markdown";
 
 interface CompareOutfitsProps {
@@ -162,8 +162,15 @@ export function CompareOutfits({
     setComparison(null);
 
     try {
+      console.log(`Compressing ${images.length} images...`);
+      const compressedImages = await Promise.all(
+        images.map((img) => compressImage(img.base64))
+      );
+      const totalSize = compressedImages.reduce((acc, img) => acc + img.length, 0);
+      console.log(`Total compressed size (Base64 length): ${totalSize}`);
+
       const { data, error } = await supabase.functions.invoke("compare-outfits", {
-        body: { images: images.map((img) => img.base64), occasion: occasion.trim() || undefined },
+        body: { images: compressedImages, occasion: occasion.trim() || undefined },
       });
 
       if (error) throw error;
