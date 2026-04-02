@@ -510,7 +510,7 @@ const Analyze = () => {
         )}
 
         {/* Compare outfits section */}
-        <div className="mt-12">
+        <div className="mt-8">
           <CompareOutfits
             isPremium={credits.creditsRemaining > 0}
             remainingCompares={credits.creditsRemaining}
