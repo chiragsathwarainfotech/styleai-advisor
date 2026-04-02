@@ -122,17 +122,17 @@ serve(async (req) => {
     });
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
     
-    if (claimsError || !claimsData?.claims) {
-      console.error('JWT verification failed:', claimsError);
+    if (authError || !user) {
+      console.error('User authentication failed:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const userId = claimsData.claims.sub as string;
+    const userId = user.id;
     console.log(`Authenticated user: ${userId}`);
 
     const { imageBase64, userName } = await req.json();
