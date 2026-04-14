@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff } from "lucide-react";
+import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, UserCircle } from "lucide-react";
+import { getPersistentDeviceId, hasUsedGuestQuota, signInAsGuest } from "@/lib/guest";
+import { isOnline } from "@/lib/connectivity";
 import {
   Dialog,
   DialogContent,
@@ -270,6 +272,15 @@ const Auth = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Require terms acceptance for signup
     if (!isLogin && !termsChecked) {
       toast({
@@ -321,12 +332,28 @@ const Auth = () => {
               terms_accepted: true,
               terms_accepted_timestamp: new Date().toISOString(),
             }, { onConflict: 'user_id' });
+
+          // Give 5 free credits to new users
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 365); // 1 year validity
+
+          await supabase
+            .from("credit_purchases")
+            .insert({
+              user_id: newUser.id,
+              credits_total: 5,
+              credits_used: 0,
+              purchased_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+              plan_name: "Welcome Bonus",
+            });
         }
         
         toast({
           title: "Account created!",
-          description: "Welcome to Styloren.",
+          description: "Congratulations!! You have got 5 FREE credits as a signing up bonus!!",
         });
+
       }
     } catch (error: any) {
       let message = error.message;
@@ -345,6 +372,15 @@ const Auth = () => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (!email) {
       toast({
@@ -513,6 +549,79 @@ const Auth = () => {
     setNewPassword("");
     setConfirmPassword("");
     setVerificationToken(null);
+  };
+
+  const handleGuestSignIn = async () => {
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const deviceId = getPersistentDeviceId();
+      
+      // 1. Check if device has already used guest quota
+      const alreadyUsed = await hasUsedGuestQuota(deviceId);
+      if (alreadyUsed) {
+        toast({
+          title: "Guest Limit Reached",
+          description: "This device has already used the Guest Sign-in. Please sign in or create an account to continue.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2. Perform Guest Sign-in
+      const { data, error } = await signInAsGuest(deviceId);
+      if (error) throw error;
+
+      const newUser = data.user;
+      if (newUser) {
+        // 3. Mark device as used in user_subscriptions for this device
+        await supabase
+          .from("user_subscriptions")
+          .upsert({
+            user_id: newUser.id,
+            display_name: `guest_${deviceId}`, // Used to track device usage
+            terms_accepted: true,
+            terms_accepted_timestamp: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+
+        // 4. Give 5 free credits
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
+
+        await supabase
+          .from("credit_purchases")
+          .insert({
+            user_id: newUser.id,
+            credits_total: 5,
+            credits_used: 0,
+            purchased_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+            plan_name: "Guest Bonus",
+          });
+
+        toast({
+          title: "Welcome, Guest!",
+          description: "You've received 5 FREE credits to try Styloren!",
+        });
+      }
+    } catch (error: any) {
+      console.error("Guest Auth Error:", error);
+      toast({
+        title: "Guest Sign-in Failed",
+        description: error.message || "Something went wrong. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -829,7 +938,7 @@ const Auth = () => {
               </form>
 
               {/* Toggle */}
-              <div className="mt-6 text-center">
+              <div className="mt-6 text-center space-y-4">
                 <button
                   onClick={() => {
                     setIsLogin(!isLogin);
@@ -842,6 +951,23 @@ const Auth = () => {
                     {isLogin ? "Sign up" : "Sign in"}
                   </span>
                 </button>
+
+                <div className="flex flex-col items-center gap-3 pt-4 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground font-body">
+                    Want to try Styloren without an account?
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGuestSignIn}
+                    disabled={loading}
+                    className="text-primary hover:text-primary/80 hover:bg-primary/10 font-body flex items-center gap-2"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    Sign in as Guest
+                  </Button>
+                </div>
               </div>
             </>
           )}

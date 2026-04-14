@@ -54,6 +54,8 @@ const Account = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -169,6 +171,33 @@ const Account = () => {
       setIsChangingPassword(false);
     }
   };
+    
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user");
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Account deleted",
+        description: "Your account and all associated data have been permanently removed.",
+      });
+      
+      // Sign out locally and redirect
+      await supabase.auth.signOut();
+      navigate("/");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account. Please try again or contact support.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountDialog(false);
+    }
+  };
 
   const handlePlanPurchased = async (plan: CreditPlan): Promise<boolean> => {
     const success = await credits.addCredits(plan);
@@ -208,6 +237,13 @@ const Account = () => {
           label: "Log Out",
           onClick: handleLogout,
           destructive: true,
+        },
+        {
+          icon: Trash2,
+          label: "Delete Account",
+          onClick: () => setShowDeleteAccountDialog(true),
+          destructive: true,
+          description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
     },
@@ -503,6 +539,36 @@ const Account = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingAll ? "Deleting..." : "Delete All"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-destructive text-center">Delete Your Account?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-foreground font-medium text-lg pt-4">
+              Do you really want to delete your account?
+            </AlertDialogDescription>
+            <AlertDialogDescription className="text-center text-muted-foreground text-sm pt-2">
+              This action is permanent and will delete all your scans, credits, and profile data forever.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center gap-4 pt-6">
+            <AlertDialogCancel 
+              disabled={isDeletingAccount}
+              className="px-8 min-w-[100px]"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 px-8 min-w-[100px]"
+            >
+              {isDeletingAccount ? "Deleting..." : "Yes"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -7,6 +7,7 @@ interface AuthContextValue {
   session: Session | null;
   isLoading: boolean;
   termsAccepted: boolean | null; // null = not yet fetched
+  isGuest: boolean;
   refetchTerms: () => Promise<void>;
 }
 
@@ -17,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   const fetchTermsStatus = async (userId: string) => {
     const { data } = await supabase
@@ -59,6 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        
+        // Handle guest status
+        const currentUser = newSession?.user;
+        const guestStatus = !!currentUser && (
+          currentUser.is_anonymous === true || 
+          currentUser.email?.endsWith("@guest.styloren.com") === true
+        );
+        setIsGuest(guestStatus);
 
         if (newSession?.user) {
           // Defer DB call to avoid deadlock
@@ -103,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, termsAccepted, refetchTerms }}>
+    <AuthContext.Provider value={{ user, session, isLoading, termsAccepted, isGuest, refetchTerms }}>
       {children}
     </AuthContext.Provider>
   );

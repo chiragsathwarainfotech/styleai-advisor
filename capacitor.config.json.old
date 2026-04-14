@@ -1,0 +1,17 @@
+{
+  "appId": "app.lovable.styleai",
+  "appName": "Styloren",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "831294607412",
+    "project_id": "styloren-cd08b",
+    "storage_bucket": "styloren-cd08b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:831294607412:android:f3fcc714bef32ecd6dfa61",
+        "android_client_info": {
+          "package_name": "app.lovable.styleai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0CcuaCi6BBSiQkjdLDu_pacsAZeeN9_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

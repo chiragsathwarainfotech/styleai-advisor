@@ -2,7 +2,10 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Images, X, Loader2, Sparkles, Plus, Lock } from "lucide-react";
+import { Images, X, Loader2, Sparkles, Plus, Lock, Camera as CameraIcon } from "lucide-react";
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import { compressImage } from "@/lib/imageCompression";
 import ReactMarkdown from "react-markdown";
 
 interface CompareOutfitsProps {
@@ -20,13 +23,13 @@ interface ImageData {
   base64: string;
 }
 
-export function CompareOutfits({ 
-  isPremium, 
-  remainingCompares, 
-  photoLimit, 
-  canCompare: canUseCompare, 
-  onCompareUsed, 
-  onUpgrade 
+export function CompareOutfits({
+  isPremium,
+  remainingCompares,
+  photoLimit,
+  canCompare: canUseCompare,
+  onCompareUsed,
+  onUpgrade
 }: CompareOutfitsProps) {
   const [images, setImages] = useState<ImageData[]>([]);
   const [comparing, setComparing] = useState(false);
@@ -78,6 +81,63 @@ export function CompareOutfits({
     }
   };
 
+  const handleTakePhoto = async () => {
+    if (images.length >= photoLimit) return;
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // First check permissions
+        const permissions = await Camera.checkPermissions();
+        if (permissions.camera === 'denied') {
+          toast({
+            title: "Camera Permission Denied",
+            description: "Please enable camera access in your device settings to take photos.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const image = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Camera
+        });
+
+        if (image.base64String) {
+          const base64 = `data:image/${image.format};base64,${image.base64String}`;
+          setImages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), preview: base64, base64 },
+          ]);
+        }
+      } else {
+        toast({
+          title: "Browser detected",
+          description: "Please use the 'Add photo' option in the browser.",
+        });
+      }
+    } catch (error: any) {
+      console.error('Camera error:', error);
+
+      // Handle the specific case where hardware is missing (Simulator)
+      if (error.message?.includes('Camera usage is not possible') || error.message?.includes('hardware')) {
+        toast({
+          title: "Camera Unavailable",
+          description: "The camera is not available on this device (Simulator). Please use 'Add photo' to select from your gallery.",
+          variant: "destructive",
+        });
+      } else if (error.message !== 'User cancelled photos app') {
+        toast({
+          title: "Camera error",
+          description: "Could not open camera. Please check your settings and try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+
   const removeImage = (id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
     setComparison(null);
@@ -102,8 +162,15 @@ export function CompareOutfits({
     setComparison(null);
 
     try {
+      console.log(`Compressing ${images.length} images...`);
+      const compressedImages = await Promise.all(
+        images.map((img) => compressImage(img.base64))
+      );
+      const totalSize = compressedImages.reduce((acc, img) => acc + img.length, 0);
+      console.log(`Total compressed size (Base64 length): ${totalSize}`);
+
       const { data, error } = await supabase.functions.invoke("compare-outfits", {
-        body: { images: images.map((img) => img.base64), occasion: occasion.trim() || undefined },
+        body: { images: compressedImages, occasion: occasion.trim() || undefined },
       });
 
       if (error) throw error;
@@ -147,7 +214,7 @@ export function CompareOutfits({
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Lock className="w-8 h-8 text-primary" />
           </div>
-        <h3 className="font-display text-xl font-semibold text-foreground mb-3">
+          <h3 className="font-display text-xl font-semibold text-foreground mb-3">
             Oh no! Looks like you've used all your free credits!
           </h3>
           <p className="text-muted-foreground font-body max-w-md mx-auto mb-6">
@@ -159,9 +226,9 @@ export function CompareOutfits({
               Get Credits
             </Button>
             {showLimitReached && (
-              <Button 
-                variant="ghost" 
-                onClick={() => setShowLimitReached(false)} 
+              <Button
+                variant="ghost"
+                onClick={() => setShowLimitReached(false)}
                 className="text-muted-foreground"
               >
                 Go back
@@ -174,8 +241,8 @@ export function CompareOutfits({
   }
 
   return (
-    <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-4 shadow-elevated">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <Images className="w-5 h-5 text-primary" />
@@ -208,7 +275,7 @@ export function CompareOutfits({
       </div>
 
       {/* Image grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         {images.map((image) => (
           <div key={image.id} className="relative group">
             <img
@@ -225,27 +292,37 @@ export function CompareOutfits({
           </div>
         ))}
         {images.length < photoLimit && (
-          <label
-            htmlFor="compare-upload"
-            className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
-          >
-            <Plus className="w-8 h-8 text-muted-foreground mb-1" />
-            <span className="text-xs text-muted-foreground">Add photo</span>
-            <input
-              ref={fileInputRef}
-              id="compare-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-            />
-          </label>
+          <>
+            <label
+              htmlFor="compare-upload"
+              className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            >
+              <Plus className="w-8 h-8 text-muted-foreground mb-1" />
+              <span className="text-xs text-muted-foreground">Add photo</span>
+              <input
+                ref={fileInputRef}
+                id="compare-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+            </label>
+            <div
+              onClick={handleTakePhoto}
+              className="aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            >
+              <CameraIcon className="w-8 h-8 text-muted-foreground mb-1" />
+              <span className="text-xs text-muted-foreground">Take photo</span>
+            </div>
+
+          </>
         )}
       </div>
 
       {/* Occasion input */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label htmlFor="occasion" className="block text-sm font-medium text-foreground mb-2">
           Kindly mention the occasion/place that you are planning to visit.
         </label>
@@ -259,7 +336,6 @@ export function CompareOutfits({
         />
       </div>
 
-      {/* Compare button */}
       <Button
         onClick={handleCompare}
         disabled={comparing || images.length < 2}
@@ -272,57 +348,49 @@ export function CompareOutfits({
           </>
         ) : (
           <>
-            <Sparkles className="w-5 h-5 mr-2" />
+            <Sparkles className="w-4 h-4 mr-2" />
             Compare Outfits
           </>
         )}
       </Button>
 
-      {/* Comparison result */}
       {comparison && (
-        <div className="mt-6 flex gap-4 animate-slide-up">
-          <div className="flex-shrink-0">
-            <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shadow-soft">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-          </div>
-          <div className="flex-1">
-            <div className="bg-muted/30 backdrop-blur-sm rounded-2xl rounded-tl-md p-6">
-              <p className="font-body text-foreground font-medium mb-4">
-                Here's my comparison of your outfits! 👗✨
-              </p>
-              <div className="prose prose-neutral max-w-none font-body text-foreground/90">
-                <ReactMarkdown
-                  components={{
-                    h2: ({ children }) => (
-                      <h3 className="font-display text-lg font-semibold text-foreground mt-5 mb-2 first:mt-0">
-                        {children}
-                      </h3>
-                    ),
-                    h3: ({ children }) => (
-                      <h4 className="font-body text-base font-semibold text-foreground mt-4 mb-2">
-                        {children}
-                      </h4>
-                    ),
-                    p: ({ children }) => (
-                      <p className="text-foreground/80 leading-relaxed mb-3">{children}</p>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-semibold text-primary">{children}</strong>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="list-disc list-inside space-y-1.5 mb-3 text-foreground/80">
-                        {children}
-                      </ul>
-                    ),
-                    li: ({ children }) => (
-                      <li className="text-foreground/80">{children}</li>
-                    ),
-                  }}
-                >
-                  {comparison}
-                </ReactMarkdown>
-              </div>
+        <div className="mt-8 animate-slide-up w-full">
+          <div className="bg-muted/30 backdrop-blur-sm rounded-2xl p-4 border border-primary/10 w-full shadow-soft">
+            <p className="font-body text-foreground font-medium mb-2">
+              Here's my comparison of your outfits! 👗✨
+            </p>
+            <div className="prose prose-neutral max-w-none font-body text-foreground/90 prose-h3:mt-3 prose-p:mb-2">
+              <ReactMarkdown
+                components={{
+                  h2: ({ children }) => (
+                    <h3 className="font-display text-lg font-semibold text-foreground mt-5 mb-2 first:mt-0">
+                      {children}
+                    </h3>
+                  ),
+                  h3: ({ children }) => (
+                    <h4 className="font-body text-base font-semibold text-foreground mt-4 mb-2">
+                      {children}
+                    </h4>
+                  ),
+                  p: ({ children }) => (
+                    <p className="text-foreground/80 leading-relaxed mb-3">{children}</p>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold text-primary">{children}</strong>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="list-disc list-inside space-y-1.5 mb-3 text-foreground/80">
+                      {children}
+                    </ul>
+                  ),
+                  li: ({ children }) => (
+                    <li className="text-foreground/80">{children}</li>
+                  ),
+                }}
+              >
+                {comparison}
+              </ReactMarkdown>
             </div>
           </div>
         </div>

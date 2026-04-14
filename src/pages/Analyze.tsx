@@ -17,6 +17,8 @@ import { useCredits, CreditPlan } from "@/hooks/useCredits";
 import { useScanHistory } from "@/hooks/useScanHistory";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { IAPSubscriptionChecker } from "@/components/IAPSubscriptionChecker";
+import { compressImage } from "@/lib/imageCompression";
+import { isOnline } from "@/lib/connectivity";
 
 const Analyze = () => {
   const { user, isLoading, termsAccepted } = useAuth();
@@ -96,6 +98,15 @@ const Analyze = () => {
       return;
     }
 
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
       toast({
         title: "Invalid file",
@@ -141,12 +152,25 @@ const Analyze = () => {
       return;
     }
 
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAnalyzing(true);
     setAnalysis(null);
 
     try {
+      console.log("Original image size (Base64 length):", imageBase64.length);
+      const compressedImage = await compressImage(imageBase64);
+      console.log("Compressed image size (Base64 length):", compressedImage.length);
+
       const { data, error } = await supabase.functions.invoke("analyze-outfit", {
-        body: { imageBase64, userName: credits.displayName || undefined, userId: user?.id },
+        body: { imageBase64: compressedImage, userName: credits.displayName || undefined, userId: user?.id },
       });
 
       if (error) throw error;
@@ -505,7 +529,7 @@ const Analyze = () => {
         )}
 
         {/* Compare outfits section */}
-        <div className="mt-12">
+        <div className="mt-8">
           <CompareOutfits
             isPremium={credits.creditsRemaining > 0}
             remainingCompares={credits.creditsRemaining}

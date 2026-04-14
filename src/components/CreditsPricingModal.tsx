@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Crown, Check, Loader2, RotateCcw, Smartphone, Sparkles } from "lucide-react";
+import { Crown, Check, Loader2, Smartphone, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CREDIT_PLANS, CreditPlan } from "@/hooks/useCredits";
 import { Capacitor } from "@capacitor/core";
+import { isNativeMobile as checkIsNativeMobile, getSafePlatform, useIOSLogic } from "@/lib/platform";
 
 interface CreditsPricingModalProps {
   open: boolean;
@@ -20,11 +23,14 @@ export function CreditsPricingModal({
   onPlanPurchased
 }: CreditsPricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
-  const [restoringPurchases, setRestoringPurchases] = useState(false);
   const { toast } = useToast();
+  const { isGuest } = useAuth();
+  const navigate = useNavigate();
+  const { creditsRemaining } = useCredits(userId);
+  
+  const guestCreditsFinished = isGuest && creditsRemaining === 0;
 
-  const isNativeMobile = Capacitor.isNativePlatform() &&
-    (Capacitor.getPlatform() === "ios" || Capacitor.getPlatform() === "android");
+  const isNativeMobile = checkIsNativeMobile();
 
   const showNativeAppRequired = !isNativeMobile;
 
@@ -44,8 +50,9 @@ export function CreditsPricingModal({
       // Use native IAP via RevenueCat to process payment
       const { Purchases } = await import("@revenuecat/purchases-capacitor");
 
-      console.log("Capacitor platform:", Capacitor.getPlatform());
-      console.log("Is native:", Capacitor.isNativePlatform());
+      console.log("[Diagnostic] Native Platform:", getSafePlatform());
+      console.log("[Diagnostic] Is Apple/iOS Logic:", useIOSLogic());
+      console.log("[Diagnostic] Plan Product ID:", plan.productId);
 
       try {
         const offerings = await Purchases.getOfferings();
@@ -118,44 +125,6 @@ export function CreditsPricingModal({
     }
   };
 
-  const handleRestorePurchases = async () => {
-    if (!isNativeMobile) {
-      toast({
-        title: "App Store Required",
-        description: "Please use the Styloren app from the App Store to restore purchases.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setRestoringPurchases(true);
-    try {
-      const { Purchases } = await import("@revenuecat/purchases-capacitor");
-      const customerInfo = await Purchases.restorePurchases();
-
-      if (customerInfo) {
-        toast({
-          title: "Purchases Restored! 🎉",
-          description: "Your previous purchases have been restored.",
-        });
-        onOpenChange(false);
-      } else {
-        toast({
-          title: "No Purchases Found",
-          description: "No previous purchases were found to restore.",
-        });
-      }
-    } catch (error: any) {
-      console.error("Restore error:", error);
-      toast({
-        title: "Restore Failed",
-        description: error.message || "Failed to restore purchases. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setRestoringPurchases(false);
-    }
-  };
 
   const isLoading = loading !== null;
 
@@ -168,10 +137,42 @@ export function CreditsPricingModal({
             Get Credits
           </DialogTitle>
           <DialogDescription className="font-body space-y-1">
-            <span className="block">Choose a plan that works for you.</span>
-            <span className="block">Use to Analyze or Compare your outfits!</span>
+            {guestCreditsFinished ? (
+              <span className="block text-destructive font-semibold">
+                Please sign in and purchase credits to continue
+              </span>
+            ) : (
+              <>
+                <span className="block">Choose a plan that works for you.</span>
+                <span className="block">Use to Analyze or Compare your outfits!</span>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Guest Credit Expiration Notice */}
+        {guestCreditsFinished && (
+          <div className="bg-primary/10 border border-primary/20 rounded-xl p-6 mb-2 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
+              <Sparkles className="w-8 h-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <p className="font-semibold text-foreground">Free Guest Credits Used</p>
+              <p className="text-sm text-muted-foreground">
+                You've enjoyed your free guest credits! To continue analyzing your style, please create an account.
+              </p>
+            </div>
+            <Button 
+              onClick={() => {
+                onOpenChange(false);
+                navigate("/auth");
+              }}
+              className="w-full gradient-primary"
+            >
+              Sign In / Sign Up
+            </Button>
+          </div>
+        )}
 
         {/* Native App Required Notice */}
         {showNativeAppRequired && (
@@ -191,7 +192,7 @@ export function CreditsPricingModal({
           </div>
         )}
 
-        <div className="grid gap-4 py-4">
+        <div className={`grid gap-4 py-4 ${guestCreditsFinished ? "opacity-40 pointer-events-none grayscale-[0.5]" : ""}`}>
           {CREDIT_PLANS.map((plan) => (
             <div
               key={plan.id}
@@ -257,30 +258,6 @@ export function CreditsPricingModal({
           ))}
         </div>
 
-        {/* Restore Purchases Button */}
-        <div className="border-t pt-4">
-          <Button
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            onClick={handleRestorePurchases}
-            disabled={restoringPurchases || isLoading || showNativeAppRequired}
-          >
-            {restoringPurchases ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Restoring...
-              </>
-            ) : (
-              <>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Restore Purchases
-              </>
-            )}
-          </Button>
-          <p className="text-xs text-center text-muted-foreground mt-2">
-            Already purchased? Tap to restore your previous purchases.
-          </p>
-        </div>
 
         {/* Legal Text */}
         <div className="text-xs text-muted-foreground text-center space-y-1 pt-2">
