@@ -15,6 +15,7 @@ import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
 import { Capacitor } from "@capacitor/core";
 import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
+import { AppTrackingTransparency } from 'capacitor-plugin-app-tracking-transparency';
 import { useEffect } from "react";
 import { User } from "lucide-react";
 
@@ -64,6 +65,15 @@ const App = () => {
           console.log("NotificationService initialized successfully");
         } catch (error) {
           console.error("NotificationService init error (Caught in App.tsx):", error);
+        }
+
+        // Initialize App Tracking Transparency
+        try {
+          console.log("[Diagnostic] Requesting Tracking Permission...");
+          const status = await AppTrackingTransparency.requestPermission();
+          console.log("[Diagnostic] Tracking Status:", status.status);
+        } catch (error) {
+          console.error("AppTrackingTransparency error:", error);
         }
 
 

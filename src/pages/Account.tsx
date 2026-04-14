@@ -54,6 +54,8 @@ const Account = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -169,6 +171,33 @@ const Account = () => {
       setIsChangingPassword(false);
     }
   };
+    
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user");
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Account deleted",
+        description: "Your account and all associated data have been permanently removed.",
+      });
+      
+      // Sign out locally and redirect
+      await supabase.auth.signOut();
+      navigate("/");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account. Please try again or contact support.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountDialog(false);
+    }
+  };
 
   const handlePlanPurchased = async (plan: CreditPlan): Promise<boolean> => {
     const success = await credits.addCredits(plan);
@@ -239,6 +268,13 @@ const Account = () => {
           destructive: true,
           disabled: totalCount === 0,
           value: totalCount === 0 ? "No scans" : `${totalCount} scan${totalCount !== 1 ? 's' : ''}`,
+        },
+        {
+          icon: Trash2,
+          label: "Delete Account",
+          onClick: () => setShowDeleteAccountDialog(true),
+          destructive: true,
+          description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
     },
@@ -503,6 +539,29 @@ const Account = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingAll ? "Deleting..." : "Delete All"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-destructive">Delete Your Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This is a permanent action. All your scans, credits, and profile information will be deleted forever 
+              and cannot be recovered. Are you absolutely sure?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAccount ? "Deleting Account..." : "Yes, Delete My Account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
