@@ -238,6 +238,13 @@ const Account = () => {
           onClick: handleLogout,
           destructive: true,
         },
+        {
+          icon: Trash2,
+          label: "Delete Account",
+          onClick: () => setShowDeleteAccountDialog(true),
+          destructive: true,
+          description: "Permanently delete your account and all data. This action cannot be undone.",
+        },
       ],
     },
     {
@@ -268,13 +275,6 @@ const Account = () => {
           destructive: true,
           disabled: totalCount === 0,
           value: totalCount === 0 ? "No scans" : `${totalCount} scan${totalCount !== 1 ? 's' : ''}`,
-        },
-        {
-          icon: Trash2,
-          label: "Delete Account",
-          onClick: () => setShowDeleteAccountDialog(true),
-          destructive: true,
-          description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
     },
@@ -548,20 +548,27 @@ const Account = () => {
       <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-destructive">Delete Your Account?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This is a permanent action. All your scans, credits, and profile information will be deleted forever 
-              and cannot be recovered. Are you absolutely sure?
+            <AlertDialogTitle className="font-display text-destructive text-center">Delete Your Account?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-foreground font-medium text-lg pt-4">
+              Do you really want to delete your account?
+            </AlertDialogDescription>
+            <AlertDialogDescription className="text-center text-muted-foreground text-sm pt-2">
+              This action is permanent and will delete all your scans, credits, and profile data forever.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="sm:justify-center gap-4 pt-6">
+            <AlertDialogCancel 
+              disabled={isDeletingAccount}
+              className="px-8 min-w-[100px]"
+            >
+              No
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAccount}
               disabled={isDeletingAccount}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 px-8 min-w-[100px]"
             >
-              {isDeletingAccount ? "Deleting Account..." : "Yes, Delete My Account"}
+              {isDeletingAccount ? "Deleting..." : "Yes"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

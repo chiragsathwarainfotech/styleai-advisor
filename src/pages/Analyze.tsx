@@ -18,6 +18,7 @@ import { useScanHistory } from "@/hooks/useScanHistory";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { IAPSubscriptionChecker } from "@/components/IAPSubscriptionChecker";
 import { compressImage } from "@/lib/imageCompression";
+import { isOnline } from "@/lib/connectivity";
 
 const Analyze = () => {
   const { user, isLoading, termsAccepted } = useAuth();
@@ -97,6 +98,15 @@ const Analyze = () => {
       return;
     }
 
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
       toast({
         title: "Invalid file",
@@ -139,6 +149,15 @@ const Analyze = () => {
     // Check credit availability
     if (!credits.canUseCredit()) {
       setShowNoCredits(true);
+      return;
+    }
+
+    if (!isOnline()) {
+      toast({
+        title: "Connection Error",
+        description: "Looks like you are not connected to the internet",
+        variant: "destructive",
+      });
       return;
     }
 

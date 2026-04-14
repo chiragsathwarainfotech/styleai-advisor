@@ -18,6 +18,7 @@ import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 import { AppTrackingTransparency } from 'capacitor-plugin-app-tracking-transparency';
 import { useEffect } from "react";
 import { User } from "lucide-react";
+import { useIOSLogic } from "./lib/platform";
 
 import { NotificationService } from "@/lib/NotificationService";
 
@@ -38,8 +39,9 @@ const App = () => {
           let apiKey = "";
           if (platform === "android") {
             apiKey = "goog_AOXyYHWMVxNshsjHtHOTleuuysM";
-          } else if (platform === "ios") {
+          } else if (useIOSLogic()) {
             apiKey = "appl_cRDLefGebMAITzuQjHnFmmqqKlU";
+            console.log("[Diagnostic] Applying iOS/Apple logic for RevenueCat");
           }
 
           console.log(`[Diagnostic] Using API Key: ${apiKey.substring(0, 10)}...`);

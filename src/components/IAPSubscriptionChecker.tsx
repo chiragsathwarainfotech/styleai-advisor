@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
+import { isNativeMobile as checkIsNativeMobile } from "@/lib/platform";
 
 interface IAPSubscriptionCheckerProps {
   userId: string | null;
@@ -12,8 +13,7 @@ interface IAPSubscriptionCheckerProps {
  */
 export function IAPSubscriptionChecker({ userId, onStatusChecked }: IAPSubscriptionCheckerProps) {
   const hasChecked = useRef(false);
-  const isNativeMobile = Capacitor.isNativePlatform() && 
-    (Capacitor.getPlatform() === "ios" || Capacitor.getPlatform() === "android");
+  const isNativeMobile = checkIsNativeMobile();
 
   useEffect(() => {
     const checkStatus = async () => {

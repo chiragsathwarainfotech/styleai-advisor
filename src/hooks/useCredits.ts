@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
+import { useIOSLogic } from "@/lib/platform";
 
 export interface CreditPlan {
   id: "quick_try" | "monthly_value" | "quarterly_saver";
@@ -27,7 +28,7 @@ export const CREDIT_PLANS: CreditPlan[] = [
     validityLabel: "15 days",
     description: "10 credits to explore Styloren, valid for 15 days",
     highlight: false,
-    productId: Capacitor.getPlatform() === "ios" ? "styloren_quick_try_1" : "styloren_quick_try",
+    productId: useIOSLogic() ? "styloren_quick_try_1" : "styloren_quick_try",
   },
   {
     id: "monthly_value",
