@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
+import { Device } from "@capacitor/device";
+import { Preferences } from "@capacitor/preferences";
+import { Capacitor } from "@capacitor/core";
 
-// Simple UUID generator (no external dependency needed)
+// Simple UUID generator for web fallback
 const generateUUID = () => {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -14,13 +17,26 @@ const GUEST_USED_KEY = "styloren_guest_used";
 
 /**
  * Robust persistent Device ID for Guest tracking.
- * Stored in localStorage.
+ * Uses Capacitor Device ID on native, localStorage+UUID on web.
  */
-export const getPersistentDeviceId = (): string => {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+export const getPersistentDeviceId = async (): Promise<string> => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const info = await Device.getId();
+      console.log("[Guest] Native device ID obtained:", info.identifier);
+      return info.identifier;
+    } catch (e) {
+      console.error("[Guest] Failed to get native device ID, falling back to storage:", e);
+    }
+  }
+
+  // Web fallback or failure fallback
+  const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
+  let deviceId = value || localStorage.getItem(DEVICE_ID_KEY);
   
   if (!deviceId) {
     deviceId = generateUUID();
+    await Preferences.set({ key: DEVICE_ID_KEY, value: deviceId });
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   
@@ -29,33 +45,34 @@ export const getPersistentDeviceId = (): string => {
 
 /**
  * Checks if the current device has already used its guest quota.
- * Uses localStorage as PRIMARY check (works even when logged out).
- * Falls back to DB check when authenticated.
+ * Uses Preferences as PRIMARY check (stable on iOS/Android).
+ * Falls back to DB check when possible.
  */
 export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
-  // PRIMARY: Check localStorage flag (always works, even when logged out)
-  const localFlag = localStorage.getItem(GUEST_USED_KEY);
+  // PRIMARY: Check persistent preferences
+  const { value } = await Preferences.get({ key: GUEST_USED_KEY });
+  const localFlag = value || localStorage.getItem(GUEST_USED_KEY);
+  
   if (localFlag === "true") {
     return true;
   }
 
-  // SECONDARY: Check DB (only works when authenticated, but covers cross-device edge cases)
+  // SECONDARY: Check DB
   try {
     const { data, error } = await supabase
       .from("user_subscriptions")
       .select("user_id")
       .eq("display_name", `guest_${deviceId}`)
-      .maybeSingle();
+      .limit(1);
 
     if (error) {
       console.error("[Guest] Error checking quota in DB:", error);
-      // If DB check fails (e.g. no auth), rely on localStorage only
       return false;
     }
 
-    if (data) {
-      // Sync: mark localStorage too, in case it was missing
-      localStorage.setItem(GUEST_USED_KEY, "true");
+    if (data && data.length > 0) {
+      // Sync: mark local too
+      await markGuestUsed();
       return true;
     }
   } catch (err) {
@@ -69,7 +86,8 @@ export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
  * Mark the current device as having used its guest quota.
  * Called after successful guest sign-in.
  */
-export const markGuestUsed = () => {
+export const markGuestUsed = async () => {
+  await Preferences.set({ key: GUEST_USED_KEY, value: "true" });
   localStorage.setItem(GUEST_USED_KEY, "true");
 };
 
@@ -85,7 +103,7 @@ export const signInAsGuest = async (deviceId: string) => {
     if (error) {
       console.error("[Guest] signInAnonymously failed, attempting fallback:", error);
       
-      // Fallback: Create a silent account with a random password if anonymous auth is disabled
+      // Fallback: Create a silent account with a random password
       const guestEmail = `guest_${deviceId.substring(0, 8)}_${Math.floor(Math.random() * 10000)}@guest.styloren.com`;
       const guestPassword = generateUUID();
       
@@ -96,7 +114,6 @@ export const signInAsGuest = async (deviceId: string) => {
       
       if (signUpError) throw signUpError;
       
-      // Return consistent shape: { data: { user, session }, error: null }
       return { data: signUpData, error: null };
     }
     

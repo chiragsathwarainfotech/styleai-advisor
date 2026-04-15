@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, UserCircle } from "lucide-react";
-import { getPersistentDeviceId, hasUsedGuestQuota, signInAsGuest } from "@/lib/guest";
+import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, CircleUser } from "lucide-react";
+import { getPersistentDeviceId, hasUsedGuestQuota, signInAsGuest, markGuestUsed } from "@/lib/guest";
 import { isOnline } from "@/lib/connectivity";
 import {
   Dialog,
@@ -264,7 +264,7 @@ const Auth = () => {
   useEffect(() => {
     const checkQuota = async () => {
       try {
-        const deviceId = getPersistentDeviceId();
+        const deviceId = await getPersistentDeviceId();
         const used = await hasUsedGuestQuota(deviceId);
         setGuestQuotaUsed(used);
       } catch {
@@ -581,7 +581,7 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const deviceId = getPersistentDeviceId();
+      const deviceId = await getPersistentDeviceId();
       
       // 1. Check if device has already used guest quota
       const alreadyUsed = await hasUsedGuestQuota(deviceId);
@@ -642,6 +642,10 @@ const Auth = () => {
       if (creditError) {
         console.error("[Guest] Error inserting credits:", creditError);
       }
+
+      // 6. Mark as used locally
+      await markGuestUsed();
+      setGuestQuotaUsed(true);
 
       toast({
         title: "Welcome, Guest!",
@@ -996,7 +1000,7 @@ const Auth = () => {
           <div className="mt-5 bg-card/60 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-border/40 animate-slide-up" style={{ animationDelay: "0.15s" }}>
             <div className="flex flex-col items-center text-center gap-2">
               <div className="flex items-center gap-2 mb-1">
-                <UserCircle className="w-5 h-5 text-primary" />
+                <CircleUser className="w-5 h-5 text-primary" />
                 <span className="font-display text-sm font-semibold text-foreground">
                   Try without an account
                 </span>
@@ -1004,13 +1008,14 @@ const Auth = () => {
 
               {guestQuotaUsed ? (
                 <p className="text-xs text-muted-foreground font-body">
-                  Guest trial already used on this device.{" "}
+                  You had already used it one time. Please{" "}
                   <button
                     onClick={() => setIsLogin(false)}
                     className="text-primary underline hover:text-primary/80"
                   >
-                    Create an account
-                  </button>
+                    create an account
+                  </button>{" "}
+                  to continue.
                 </p>
               ) : (
                 <>
@@ -1033,7 +1038,7 @@ const Auth = () => {
                       </>
                     ) : (
                       <>
-                        <UserCircle className="w-3.5 h-3.5 mr-2" />
+                        <CircleUser className="w-3.5 h-3.5 mr-2" />
                         Sign in as Guest
                       </>
                     )}

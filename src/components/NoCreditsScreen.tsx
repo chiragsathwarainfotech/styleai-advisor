@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Lock, UserCircle } from "lucide-react";
+import { Sparkles, Lock, CircleUser } from "lucide-react";
 
 interface NoCreditsScreenProps {
   isExpired: boolean;
@@ -31,7 +31,7 @@ export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsS
               onClick={() => navigate("/auth")}
               className="w-full gradient-primary border-0 h-12"
             >
-              <UserCircle className="w-5 h-5 mr-2" />
+              <CircleUser className="w-5 h-5 mr-2" />
               Sign In / Create Account
             </Button>
             <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground font-body">

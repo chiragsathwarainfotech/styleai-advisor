@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, UserCircle, Lock } from "lucide-react";
+import { Sparkles, CircleUser, Lock } from "lucide-react";
 
 interface GuestCreditsExpiredModalProps {
   open: boolean;
@@ -49,7 +49,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
             onClick={() => navigate("/auth")}
             className="w-full gradient-primary border-0 h-12 font-body font-semibold"
           >
-            <UserCircle className="w-4 h-4 mr-2" />
+            <CircleUser className="w-4 h-4 mr-2" />
             Sign In / Create Account
           </Button>
 
