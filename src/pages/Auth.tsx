@@ -292,7 +292,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -394,7 +394,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -573,7 +573,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
