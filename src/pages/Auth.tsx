@@ -359,7 +359,7 @@ const Auth = () => {
             .from("credit_purchases")
             .insert({
               user_id: newUser.id,
-              credits_total: 5,
+              credits_total: 1,
               credits_used: 0,
               purchased_at: new Date().toISOString(),
               expires_at: expiresAt.toISOString(),
@@ -369,7 +369,7 @@ const Auth = () => {
         
         toast({
           title: "Account created!",
-          description: "Congratulations!! You have got 5 FREE credits as a signing up bonus!!",
+          description: "Congratulations!! You have got 1 FREE credit as a signing up bonus!!",
         });
 
       }
@@ -624,7 +624,7 @@ const Auth = () => {
         console.error("[Guest] Error saving subscription:", subError);
       }
 
-      // 5. Give 5 free credits
+      // 5. Give 1 free credit
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
 
@@ -632,7 +632,7 @@ const Auth = () => {
         .from("credit_purchases")
         .insert({
           user_id: newUser.id,
-          credits_total: 5,
+          credits_total: 1,
           credits_used: 0,
           purchased_at: new Date().toISOString(),
           expires_at: expiresAt.toISOString(),
@@ -645,7 +645,7 @@ const Auth = () => {
 
       toast({
         title: "Welcome, Guest!",
-        description: "You've received 5 FREE credits to try Styloren!",
+        description: "You've received 1 FREE credit to try Styloren!",
       });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
@@ -1015,7 +1015,7 @@ const Auth = () => {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground font-body">
-                    Get <span className="font-semibold text-primary">5 free credits</span> instantly, no sign-up needed
+                    Get <span className="font-semibold text-primary">1 free credit</span> instantly, no sign-up needed
                   </p>
                   <Button
                     id="guest-signin-btn"

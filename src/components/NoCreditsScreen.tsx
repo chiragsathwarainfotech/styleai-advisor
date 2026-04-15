@@ -37,7 +37,7 @@ export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsS
             <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground font-body">
               <Sparkles className="w-3 h-3 text-primary" />
               New users get{" "}
-              <span className="text-primary font-semibold mx-1">5 free credits</span>{" "}
+              <span className="text-primary font-semibold mx-1">1 free credit</span>{" "}
               on sign-up!
             </div>
           </div>
