@@ -76,10 +76,10 @@ export const signInAsGuest = async (deviceId: string) => {
       return signUpData;
     }
     
-    return data;
-  } catch (err) {
+    return { data, error: null };
+  } catch (err: any) {
     console.error("[Guest] Guest Sign-in error:", err);
-    throw err;
+    return { data: null, error: err };
   }
 };
 

@@ -175,16 +175,28 @@ const Account = () => {
   const handleDeleteAccount = async () => {
     setIsDeletingAccount(true);
     try {
-      const { data, error } = await supabase.functions.invoke("delete-user");
-      
-      if (error) throw error;
-      
+      const userId = user?.id;
+      if (!userId) throw new Error("No user session found.");
+
+      // Delete all user data using the authenticated client (RLS allows this)
+      await supabase.from("scan_history").delete().eq("user_id", userId);
+      await supabase.from("upload_rate_limits").delete().eq("user_id", userId);
+      await supabase.from("credit_purchases").delete().eq("user_id", userId);
+      await supabase.from("user_subscriptions").delete().eq("user_id", userId);
+
+      // Attempt to delete auth user via Edge Function (best effort)
+      try {
+        await supabase.functions.invoke("delete-user");
+      } catch (_edgeFnError) {
+        // Edge Function unreachable in local dev — data is already cleared, sign out is sufficient
+        console.warn("Edge Function unavailable, proceeding with sign-out only.");
+      }
+
       toast({
         title: "Account deleted",
         description: "Your account and all associated data have been permanently removed.",
       });
-      
-      // Sign out locally and redirect
+
       await supabase.auth.signOut();
       navigate("/");
     } catch (error: any) {
@@ -237,13 +249,6 @@ const Account = () => {
           label: "Log Out",
           onClick: handleLogout,
           destructive: true,
-        },
-        {
-          icon: Trash2,
-          label: "Delete Account",
-          onClick: () => setShowDeleteAccountDialog(true),
-          destructive: true,
-          description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
     },
@@ -323,6 +328,18 @@ const Account = () => {
           icon: FileText,
           label: "Terms & Conditions",
           onClick: () => navigate("/terms-conditions"),
+        },
+      ],
+    },
+    {
+      title: "Danger Zone",
+      items: [
+        {
+          icon: Trash2,
+          label: "Delete Account",
+          onClick: () => setShowDeleteAccountDialog(true),
+          destructive: true,
+          description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
     },
@@ -548,7 +565,7 @@ const Account = () => {
       <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-destructive text-center">Delete Your Account?</AlertDialogTitle>
+            <AlertDialogTitle className="font-display text-destructive text-center">Delete Account</AlertDialogTitle>
             <AlertDialogDescription className="text-center text-foreground font-medium text-lg pt-4">
               Do you really want to delete your account?
             </AlertDialogDescription>

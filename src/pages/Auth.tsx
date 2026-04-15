@@ -323,7 +323,8 @@ const Auth = () => {
         if (error) throw error;
         
         // Update the user_subscriptions table to mark terms as accepted
-        const { data: { user: newUser } } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        const newUser = data?.user;
         if (newUser) {
           await supabase
             .from("user_subscriptions")
@@ -577,10 +578,10 @@ const Auth = () => {
       }
 
       // 2. Perform Guest Sign-in
-      const { data, error } = await signInAsGuest(deviceId);
-      if (error) throw error;
+      const response = await signInAsGuest(deviceId);
+      if (response.error) throw response.error;
 
-      const newUser = data.user;
+      const newUser = response.data?.user;
       if (newUser) {
         // 3. Mark device as used in user_subscriptions for this device
         await supabase

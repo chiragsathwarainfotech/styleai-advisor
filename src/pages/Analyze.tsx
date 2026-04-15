@@ -176,7 +176,7 @@ const Analyze = () => {
       if (error) throw error;
 
       // Handle rate limit response
-      if (data.error === 'rate_limit_exceeded') {
+      if (data?.error === 'rate_limit_exceeded') {
         setRateLimited(true);
         toast({
           title: "You're uploading too fast 🚀",
@@ -187,11 +187,11 @@ const Analyze = () => {
         return;
       }
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
-      setAnalysis(data.analysis);
+      setAnalysis(data?.analysis || "");
 
       // Deduct 1 credit for the analysis
       await credits.useCredit();

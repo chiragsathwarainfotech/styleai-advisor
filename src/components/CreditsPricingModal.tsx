@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Crown, Check, Loader2, Smartphone, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CREDIT_PLANS, CreditPlan } from "@/hooks/useCredits";
+import { useCredits, CREDIT_PLANS, CreditPlan } from "@/hooks/useCredits";
 import { Capacitor } from "@capacitor/core";
 import { isNativeMobile as checkIsNativeMobile, getSafePlatform, useIOSLogic } from "@/lib/platform";
 
@@ -26,7 +26,8 @@ export function CreditsPricingModal({
   const { toast } = useToast();
   const { isGuest } = useAuth();
   const navigate = useNavigate();
-  const { creditsRemaining } = useCredits(userId);
+  const credits = useCredits(userId);
+  const creditsRemaining = credits?.creditsRemaining ?? 0;
   
   const guestCreditsFinished = isGuest && creditsRemaining === 0;
 
