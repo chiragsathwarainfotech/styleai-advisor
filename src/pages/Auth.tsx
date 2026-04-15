@@ -218,7 +218,8 @@ const Auth = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
-  
+  const [guestQuotaUsed, setGuestQuotaUsed] = useState(false);
+  const [guestQuotaChecking, setGuestQuotaChecking] = useState(true);
   
   // Forgot password states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -259,6 +260,22 @@ const Auth = () => {
     autoAcceptAndRedirect();
   }, [isLoading, user, termsAccepted, navigate, refetchTerms]);
 
+  // Pre-check guest device quota on mount
+  useEffect(() => {
+    const checkQuota = async () => {
+      try {
+        const deviceId = getPersistentDeviceId();
+        const used = await hasUsedGuestQuota(deviceId);
+        setGuestQuotaUsed(used);
+      } catch {
+        setGuestQuotaUsed(false);
+      } finally {
+        setGuestQuotaChecking(false);
+      }
+    };
+    checkQuota();
+  }, []);
+
   // Show loading spinner while checking auth
   if (isLoading) {
     return (
@@ -275,7 +292,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -323,7 +340,8 @@ const Auth = () => {
         if (error) throw error;
         
         // Update the user_subscriptions table to mark terms as accepted
-        const { data: { user: newUser } } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        const newUser = data?.user;
         if (newUser) {
           await supabase
             .from("user_subscriptions")
@@ -376,7 +394,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -555,7 +573,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -577,41 +595,58 @@ const Auth = () => {
       }
 
       // 2. Perform Guest Sign-in
-      const { data, error } = await signInAsGuest(deviceId);
-      if (error) throw error;
+      const response = await signInAsGuest(deviceId);
+      if (response.error) throw response.error;
 
-      const newUser = data.user;
-      if (newUser) {
-        // 3. Mark device as used in user_subscriptions for this device
-        await supabase
-          .from("user_subscriptions")
-          .upsert({
-            user_id: newUser.id,
-            display_name: `guest_${deviceId}`, // Used to track device usage
-            terms_accepted: true,
-            terms_accepted_timestamp: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
-
-        // 4. Give 5 free credits
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
-
-        await supabase
-          .from("credit_purchases")
-          .insert({
-            user_id: newUser.id,
-            credits_total: 5,
-            credits_used: 0,
-            purchased_at: new Date().toISOString(),
-            expires_at: expiresAt.toISOString(),
-            plan_name: "Guest Bonus",
-          });
-
-        toast({
-          title: "Welcome, Guest!",
-          description: "You've received 5 FREE credits to try Styloren!",
-        });
+      // 3. Get the user — try response first, fallback to current session
+      let newUser = response.data?.user;
+      if (!newUser) {
+        console.warn("[Guest] User not in response, fetching from session...");
+        const { data: sessionData } = await supabase.auth.getUser();
+        newUser = sessionData?.user;
       }
+
+      if (!newUser) {
+        throw new Error("Guest sign-in succeeded but no user was returned.");
+      }
+
+      // 4. Mark device as used in user_subscriptions
+      const { error: subError } = await supabase
+        .from("user_subscriptions")
+        .upsert({
+          user_id: newUser.id,
+          display_name: `guest_${deviceId}`,
+          terms_accepted: true,
+          terms_accepted_timestamp: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (subError) {
+        console.error("[Guest] Error saving subscription:", subError);
+      }
+
+      // 5. Give 5 free credits
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
+
+      const { error: creditError } = await supabase
+        .from("credit_purchases")
+        .insert({
+          user_id: newUser.id,
+          credits_total: 5,
+          credits_used: 0,
+          purchased_at: new Date().toISOString(),
+          expires_at: expiresAt.toISOString(),
+          plan_name: "Guest Bonus",
+        });
+
+      if (creditError) {
+        console.error("[Guest] Error inserting credits:", creditError);
+      }
+
+      toast({
+        title: "Welcome, Guest!",
+        description: "You've received 5 FREE credits to try Styloren!",
+      });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
       toast({
@@ -938,7 +973,7 @@ const Auth = () => {
               </form>
 
               {/* Toggle */}
-              <div className="mt-6 text-center space-y-4">
+              <div className="mt-6 text-center">
                 <button
                   onClick={() => {
                     setIsLogin(!isLogin);
@@ -951,27 +986,63 @@ const Auth = () => {
                     {isLogin ? "Sign up" : "Sign in"}
                   </span>
                 </button>
-
-                <div className="flex flex-col items-center gap-3 pt-4 border-t border-border/50">
-                  <p className="text-xs text-muted-foreground font-body">
-                    Want to try Styloren without an account?
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleGuestSignIn}
-                    disabled={loading}
-                    className="text-primary hover:text-primary/80 hover:bg-primary/10 font-body flex items-center gap-2"
-                  >
-                    <UserCircle className="w-4 h-4" />
-                    Sign in as Guest
-                  </Button>
-                </div>
               </div>
             </>
           )}
         </div>
+
+        {/* Guest Sign-In Mini-Card — shown only on login tab, not during forgot password */}
+        {isLogin && !showForgotPassword && (
+          <div className="mt-5 bg-card/60 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-border/40 animate-slide-up" style={{ animationDelay: "0.15s" }}>
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex items-center gap-2 mb-1">
+                <UserCircle className="w-5 h-5 text-primary" />
+                <span className="font-display text-sm font-semibold text-foreground">
+                  Try without an account
+                </span>
+              </div>
+
+              {guestQuotaUsed ? (
+                <p className="text-xs text-muted-foreground font-body">
+                  Guest trial already used on this device.{" "}
+                  <button
+                    onClick={() => setIsLogin(false)}
+                    className="text-primary underline hover:text-primary/80"
+                  >
+                    Create an account
+                  </button>
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground font-body">
+                    Get <span className="font-semibold text-primary">5 free credits</span> instantly, no sign-up needed
+                  </p>
+                  <Button
+                    id="guest-signin-btn"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGuestSignIn}
+                    disabled={loading || guestQuotaChecking}
+                    className="mt-1 px-6 font-body font-medium border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-all"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      <>
+                        <UserCircle className="w-3.5 h-3.5 mr-2" />
+                        Sign in as Guest
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Terms Dialog */}

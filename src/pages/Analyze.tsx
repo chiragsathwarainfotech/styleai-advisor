@@ -13,6 +13,7 @@ import { CreditsDisplay } from "@/components/CreditsDisplay";
 import { CompareOutfits } from "@/components/CompareOutfits";
 import { NameInputModal } from "@/components/NameInputModal";
 import { NoCreditsScreen } from "@/components/NoCreditsScreen";
+import { GuestCreditsExpiredModal } from "@/components/GuestCreditsExpiredModal";
 import { useCredits, CreditPlan } from "@/hooks/useCredits";
 import { useScanHistory } from "@/hooks/useScanHistory";
 import { AnalysisCard } from "@/components/AnalysisCard";
@@ -21,7 +22,7 @@ import { compressImage } from "@/lib/imageCompression";
 import { isOnline } from "@/lib/connectivity";
 
 const Analyze = () => {
-  const { user, isLoading, termsAccepted } = useAuth();
+  const { user, isLoading, termsAccepted, isGuest } = useAuth();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -101,7 +102,7 @@ const Analyze = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -155,7 +156,7 @@ const Analyze = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -176,7 +177,7 @@ const Analyze = () => {
       if (error) throw error;
 
       // Handle rate limit response
-      if (data.error === 'rate_limit_exceeded') {
+      if (data?.error === 'rate_limit_exceeded') {
         setRateLimited(true);
         toast({
           title: "You're uploading too fast 🚀",
@@ -187,11 +188,11 @@ const Analyze = () => {
         return;
       }
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
-      setAnalysis(data.analysis);
+      setAnalysis(data?.analysis || "");
 
       // Deduct 1 credit for the analysis
       await credits.useCredit();
@@ -271,6 +272,16 @@ const Analyze = () => {
 
   // Show no credits screen overlay if needed
   if (showNoCredits) {
+    // For guest users: show the non-dismissable GuestCreditsExpiredModal
+    if (isGuest) {
+      return (
+        <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
+          <GuestCreditsExpiredModal open={true} />
+        </div>
+      );
+    }
+
+    // For regular users: standard NoCreditsScreen + pricing modal
     return (
       <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
         <div className="max-w-md w-full">

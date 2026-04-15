@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { v4 as uuidv4 } from "uuid";
 
-// We don't have uuid installed, so let's use a simple crypto-based one or simple random
+// Simple UUID generator (no external dependency needed)
 const generateUUID = () => {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -10,18 +9,19 @@ const generateUUID = () => {
   });
 };
 
+const DEVICE_ID_KEY = "styloren_device_id";
+const GUEST_USED_KEY = "styloren_guest_used";
+
 /**
  * Robust persistent Device ID for Guest tracking.
- * Stored in localStorage. If cleared, it may be lost, but it's the 
- * standard approach without native plugins.
+ * Stored in localStorage.
  */
 export const getPersistentDeviceId = (): string => {
-  const STORAGE_KEY = "styloren_device_id";
-  let deviceId = localStorage.getItem(STORAGE_KEY);
+  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
   
   if (!deviceId) {
     deviceId = generateUUID();
-    localStorage.setItem(STORAGE_KEY, deviceId);
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   
   return deviceId;
@@ -29,9 +29,17 @@ export const getPersistentDeviceId = (): string => {
 
 /**
  * Checks if the current device has already used its guest quota.
- * This checks the database for users associated with this device ID.
+ * Uses localStorage as PRIMARY check (works even when logged out).
+ * Falls back to DB check when authenticated.
  */
 export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
+  // PRIMARY: Check localStorage flag (always works, even when logged out)
+  const localFlag = localStorage.getItem(GUEST_USED_KEY);
+  if (localFlag === "true") {
+    return true;
+  }
+
+  // SECONDARY: Check DB (only works when authenticated, but covers cross-device edge cases)
   try {
     const { data, error } = await supabase
       .from("user_subscriptions")
@@ -40,15 +48,29 @@ export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
       .maybeSingle();
 
     if (error) {
-      console.error("[Guest] Error checking quota:", error);
+      console.error("[Guest] Error checking quota in DB:", error);
+      // If DB check fails (e.g. no auth), rely on localStorage only
       return false;
     }
 
-    return !!data;
+    if (data) {
+      // Sync: mark localStorage too, in case it was missing
+      localStorage.setItem(GUEST_USED_KEY, "true");
+      return true;
+    }
   } catch (err) {
     console.error("[Guest] catch error checking quota:", err);
-    return false;
   }
+
+  return false;
+};
+
+/**
+ * Mark the current device as having used its guest quota.
+ * Called after successful guest sign-in.
+ */
+export const markGuestUsed = () => {
+  localStorage.setItem(GUEST_USED_KEY, "true");
 };
 
 /**
@@ -73,13 +95,15 @@ export const signInAsGuest = async (deviceId: string) => {
       });
       
       if (signUpError) throw signUpError;
-      return signUpData;
+      
+      // Return consistent shape: { data: { user, session }, error: null }
+      return { data: signUpData, error: null };
     }
     
-    return data;
-  } catch (err) {
+    return { data, error: null };
+  } catch (err: any) {
     console.error("[Guest] Guest Sign-in error:", err);
-    throw err;
+    return { data: null, error: err };
   }
 };
 
