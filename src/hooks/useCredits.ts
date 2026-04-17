@@ -81,8 +81,8 @@ function parseBatches(rows: any[]): CreditBatch[] {
   const now = new Date();
   return rows.map((row) => {
     const expiresAt = new Date(row.expires_at);
-    const isExpired = now > expiresAt;
-    const remaining = isExpired ? 0 : Math.max(0, row.credits_total - row.credits_used);
+    const isExpired = false; // Expiration disabled
+    const remaining = Math.max(0, row.credits_total - row.credits_used);
     return {
       id: row.id,
       creditsTotal: row.credits_total,
@@ -112,7 +112,7 @@ async function fetchCreditsData(userId: string): Promise<CreditsState> {
     .order("expires_at", { ascending: true });
 
   const batches = parseBatches(batchRows || []);
-  const activeBatches = batches.filter((b) => !b.isExpired && b.creditsRemaining > 0);
+  const activeBatches = batches.filter((b) => b.creditsRemaining > 0);
 
   const totalRemaining = activeBatches.reduce((sum, b) => sum + b.creditsRemaining, 0);
   const totalCredits = batches.reduce((sum, b) => sum + b.creditsTotal, 0);
@@ -165,8 +165,8 @@ export function useCredits(userId: string | null) {
     if (!userId) return false;
     if (!canUseCredit()) return false;
 
-    // Find the first active batch with remaining credits (ordered by expires_at asc)
-    const activeBatch = state.batches.find((b) => !b.isExpired && b.creditsRemaining > 0);
+    // Find the first batch with remaining credits (effectively FIFO)
+    const activeBatch = state.batches.find((b) => b.creditsRemaining > 0);
     if (!activeBatch) return false;
 
     try {
@@ -234,7 +234,8 @@ export function useCredits(userId: string | null) {
 
     try {
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + plan.validityDays * 24 * 60 * 60 * 1000);
+      // Set to a far future date (year 2100) to effectively remove expiration
+      const expiresAt = new Date("2100-01-01T00:00:00Z");
 
       const { error } = await supabase.from("credit_purchases").insert({
         user_id: userId,
@@ -265,24 +266,11 @@ export function useCredits(userId: string | null) {
     }
   };
 
-  // Get active (non-expired) batches with remaining credits
+  // Get batches with remaining credits
   const getActiveBatches = (): CreditBatch[] => {
-    return state.batches.filter((b) => !b.isExpired && b.creditsRemaining > 0);
+    return state.batches.filter((b) => b.creditsRemaining > 0);
   };
 
-  // Legacy compatibility
-  const getExpiryInfo = (): string | null => {
-    const active = getActiveBatches();
-    if (active.length === 0) return null;
-    const earliest = active[0];
-    const now = new Date();
-    const diff = earliest.expiresAt.getTime() - now.getTime();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    if (days <= 0) return "Expires today";
-    if (days === 1) return "Expires tomorrow";
-    if (days <= 7) return `Expires in ${days} days`;
-    return `Expires on ${earliest.expiresAt.toLocaleDateString()}`;
-  };
 
   return {
     ...state,
@@ -291,7 +279,6 @@ export function useCredits(userId: string | null) {
     useCredit,
     addCredits,
     setSaveScanHistory,
-    getExpiryInfo,
     getActiveBatches,
     refetch,
   };

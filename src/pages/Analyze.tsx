@@ -14,6 +14,7 @@ import { CompareOutfits } from "@/components/CompareOutfits";
 import { NameInputModal } from "@/components/NameInputModal";
 import { NoCreditsScreen } from "@/components/NoCreditsScreen";
 import { GuestCreditsExpiredModal } from "@/components/GuestCreditsExpiredModal";
+import { GuestWelcomeModal } from "@/components/GuestWelcomeModal";
 import { useCredits, CreditPlan } from "@/hooks/useCredits";
 import { useScanHistory } from "@/hooks/useScanHistory";
 import { AnalysisCard } from "@/components/AnalysisCard";
@@ -31,6 +32,7 @@ const Analyze = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [showNoCredits, setShowNoCredits] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Name state
   const [showNameModal, setShowNameModal] = useState(false);
@@ -60,6 +62,14 @@ const Analyze = () => {
       setShowNameModal(true);
     }
   }, [credits.isLoading, credits.displayName, user]);
+  
+  // Show guest welcome modal
+  useEffect(() => {
+    if (!isLoading && isGuest && !localStorage.getItem("guestWelcomeShown")) {
+      setShowWelcomeModal(true);
+      localStorage.setItem("guestWelcomeShown", "true");
+    }
+  }, [isLoading, isGuest]);
 
   const handleNameComplete = async (name: string) => {
     setShowNameModal(false);
@@ -564,6 +574,11 @@ const Analyze = () => {
         onOpenChange={setShowPricing}
         userId={user?.id}
         onPlanPurchased={handlePlanPurchased}
+      />
+
+      <GuestWelcomeModal
+        open={showWelcomeModal}
+        onOpenChange={setShowWelcomeModal}
       />
     </div>
   );

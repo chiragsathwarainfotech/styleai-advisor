@@ -17,6 +17,7 @@ import {
   Eye,
   Trash2,
   Clock,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -260,6 +261,11 @@ const Account = () => {
           label: "Scan History",
           onClick: () => navigate("/scan-history"),
         },
+        {
+          icon: CreditCard,
+          label: "Purchase History",
+          onClick: () => navigate("/purchase-history"),
+        },
       ],
     },
     {
@@ -392,16 +398,6 @@ const Account = () => {
                   {getCreditsLabel()}
                 </span>
               </div>
-              {credits.getActiveBatches().length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {credits.getActiveBatches().map((batch) => (
-                    <div key={batch.id} className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      {batch.creditsRemaining} credit{batch.creditsRemaining !== 1 ? "s" : ""} — Expires {batch.expiresAt.toLocaleDateString()}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 

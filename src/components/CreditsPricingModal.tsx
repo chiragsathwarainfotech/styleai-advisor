@@ -170,7 +170,7 @@ export function CreditsPricingModal({
               }}
               className="w-full gradient-primary"
             >
-              Sign In / Sign Up
+              Signup
             </Button>
           </div>
         )}
@@ -234,10 +234,6 @@ export function CreditsPricingModal({
                       ? "100 credits for serious style planning"
                       : `${plan.credits} credits to explore Styloren`}
                 </li>
-                <li className="flex items-center gap-2 text-sm text-foreground/80">
-                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  Valid for {plan.validityLabel}
-                </li>
               </ul>
 
               <Button
@@ -264,9 +260,6 @@ export function CreditsPricingModal({
         <div className="text-xs text-muted-foreground text-center space-y-1 pt-2">
           <p>
             Payment will be charged to your App Store account at confirmation of purchase.
-          </p>
-          <p>
-            Credits expire at the end of the validity period and do not roll over.
           </p>
         </div>
       </DialogContent>

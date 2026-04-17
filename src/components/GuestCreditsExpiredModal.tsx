@@ -36,7 +36,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
 
           <AlertDialogDescription className="text-center font-body text-base leading-relaxed">
             You've used all{" "}
-            <strong className="text-foreground">5 free credits</strong>.
+            <strong className="text-foreground">3 free credits</strong>.
             <br />
             Please sign in and purchase credits to continue enjoying Styloren.
           </AlertDialogDescription>
@@ -50,7 +50,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
             className="w-full gradient-primary border-0 h-12 font-body font-semibold"
           >
             <CircleUser className="w-4 h-4 mr-2" />
-            Sign In / Create Account
+            Signup
           </Button>
 
           {/* Bonus hint */}
@@ -58,7 +58,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
             <Sparkles className="w-3 h-3 text-primary" />
             <p className="text-xs text-center text-muted-foreground font-body">
               New users get{" "}
-              <span className="text-primary font-semibold">5 free credits</span>{" "}
+              <span className="text-primary font-semibold">3 free credits</span>{" "}
               on sign-up!
             </p>
           </div>

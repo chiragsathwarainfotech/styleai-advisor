@@ -351,9 +351,8 @@ const Auth = () => {
               terms_accepted_timestamp: new Date().toISOString(),
             }, { onConflict: 'user_id' });
 
-          // Give 5 free credits to new users
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 365); // 1 year validity
+          // Give free credits to new users
+          const expiresAt = new Date("2100-01-01T00:00:00Z");
 
           await supabase
             .from("credit_purchases")
@@ -624,15 +623,14 @@ const Auth = () => {
         console.error("[Guest] Error saving subscription:", subError);
       }
 
-      // 5. Give 1 free credit
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
+      // 5. Give 3 free credits
+      const expiresAt = new Date("2100-01-01T00:00:00Z");
 
       const { error: creditError } = await supabase
         .from("credit_purchases")
         .insert({
           user_id: newUser.id,
-          credits_total: 1,
+          credits_total: 3,
           credits_used: 0,
           purchased_at: new Date().toISOString(),
           expires_at: expiresAt.toISOString(),
@@ -649,7 +647,7 @@ const Auth = () => {
 
       toast({
         title: "Welcome, Guest!",
-        description: "You've received 1 FREE credit to try Styloren!",
+        description: "You've received 3 FREE credits to try Styloren!",
       });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
@@ -1020,7 +1018,7 @@ const Auth = () => {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground font-body">
-                    Get <span className="font-semibold text-primary">1 free credit</span> instantly, no sign-up needed
+                    Instantly, no sign-up needed
                   </p>
                   <Button
                     id="guest-signin-btn"
