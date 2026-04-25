@@ -57,16 +57,16 @@ export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
     return true;
   }
 
-  // SECONDARY: Check DB
+  // SECONDARY: Check new dedicated guest_users table
   try {
     const { data, error } = await supabase
-      .from("user_subscriptions")
-      .select("user_id")
-      .eq("display_name", `guest_${deviceId}`)
+      .from("guest_users")
+      .select("id")
+      .eq("device_id", deviceId)
       .limit(1);
 
     if (error) {
-      console.error("[Guest] Error checking quota in DB:", error);
+      console.error("[Guest] Error checking quota in guest_users:", error);
       return false;
     }
 
@@ -76,7 +76,7 @@ export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
       return true;
     }
   } catch (err) {
-    console.error("[Guest] catch error checking quota:", err);
+    console.error("[Guest] catch error checking guest_users quota:", err);
   }
 
   return false;
@@ -99,9 +99,11 @@ export const signInAsGuest = async (deviceId: string) => {
   try {
     // Attempt standard anonymous sign-in first
     const { data, error } = await supabase.auth.signInAnonymously();
+    let authData = data;
+    let authError = error;
     
-    if (error) {
-      console.error("[Guest] signInAnonymously failed, attempting fallback:", error);
+    if (authError) {
+      console.error("[Guest] signInAnonymously failed, attempting fallback:", authError);
       
       // Fallback: Create a silent account with a random password
       const guestEmail = `guest_${deviceId.substring(0, 8)}_${Math.floor(Math.random() * 10000)}@guest.styloren.com`;
@@ -113,11 +115,22 @@ export const signInAsGuest = async (deviceId: string) => {
       });
       
       if (signUpError) throw signUpError;
-      
-      return { data: signUpData, error: null };
+      authData = signUpData;
+      authError = null;
     }
     
-    return { data, error: null };
+    if (authData?.user) {
+      console.log("[Guest] Recording guest entry in guest_users table");
+      // Record in dedicated guest_users table
+      await supabase.from("guest_users").upsert({
+        device_id: deviceId,
+        user_id: authData.user.id
+      }, { onConflict: 'device_id' });
+      
+      await markGuestUsed();
+    }
+    
+    return { data: authData, error: authError };
   } catch (err: any) {
     console.error("[Guest] Guest Sign-in error:", err);
     return { data: null, error: err };

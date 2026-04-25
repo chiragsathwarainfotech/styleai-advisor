@@ -138,9 +138,9 @@ export function CreditsPricingModal({
             Get Credits
           </DialogTitle>
           <DialogDescription className="font-body space-y-1">
-            {guestCreditsFinished ? (
+            {isGuest ? (
               <span className="block text-destructive font-semibold">
-                Please sign in and purchase credits to continue
+                Please sign in to purchase credits
               </span>
             ) : (
               <>
@@ -151,16 +151,16 @@ export function CreditsPricingModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Guest Credit Expiration Notice */}
-        {guestCreditsFinished && (
+        {/* Guest Purchase Restriction Notice */}
+        {isGuest && (
           <div className="bg-primary/10 border border-primary/20 rounded-xl p-6 mb-2 text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
-              <Sparkles className="w-8 h-8 text-primary" />
+              <Smartphone className="w-8 h-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <p className="font-semibold text-foreground">Free Guest Credits Used</p>
+              <p className="font-semibold text-foreground">Sign Up to Purchase</p>
               <p className="text-sm text-muted-foreground">
-                You've enjoyed your free guest credits! To continue analyzing your style, please create an account.
+                To purchase and store credits permanently, you need to create an account first.
               </p>
             </div>
             <Button 
@@ -170,13 +170,13 @@ export function CreditsPricingModal({
               }}
               className="w-full gradient-primary"
             >
-              Signup
+              Sign In / Create Account
             </Button>
           </div>
         )}
 
-        {/* Native App Required Notice */}
-        {showNativeAppRequired && (
+        {/* Native App Required Notice (only for real users) */}
+        {!isGuest && showNativeAppRequired && (
           <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
@@ -193,7 +193,7 @@ export function CreditsPricingModal({
           </div>
         )}
 
-        <div className={`grid gap-4 py-4 ${guestCreditsFinished ? "opacity-40 pointer-events-none grayscale-[0.5]" : ""}`}>
+        <div className={`grid gap-4 py-4 ${isGuest ? "opacity-40 pointer-events-none grayscale-[0.5]" : ""}`}>
           {CREDIT_PLANS.map((plan) => (
             <div
               key={plan.id}

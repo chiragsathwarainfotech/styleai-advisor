@@ -210,7 +210,7 @@ const PrivacyContent = () => (
 );
 
 const Auth = () => {
-  const { user, isLoading, termsAccepted, refetchTerms } = useAuth();
+  const { user, isLoading, termsAccepted, refetchTerms, isGuest } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -233,13 +233,20 @@ const Auth = () => {
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   
+  // Sign up OTP states
+  const [showSignUpOtp, setShowSignUpOtp] = useState(false);
+  const [signUpOtp, setSignUpOtp] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [showBonusDialog, setShowBonusDialog] = useState(false);
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Redirect logged-in users (terms are accepted during signup, so skip the gate)
   useEffect(() => {
     const autoAcceptAndRedirect = async () => {
-      if (!isLoading && user) {
+      // Only redirect if NOT a guest and NOT showing the bonus dialog
+      if (!isLoading && user && !isGuest && !showBonusDialog && !showSignUpOtp) {
         // If terms not yet accepted, auto-accept them (since signup already requires acceptance)
         if (termsAccepted === false) {
           await supabase
@@ -258,7 +265,7 @@ const Auth = () => {
       }
     };
     autoAcceptAndRedirect();
-  }, [isLoading, user, termsAccepted, navigate, refetchTerms]);
+  }, [isLoading, user, isGuest, termsAccepted, navigate, refetchTerms, showBonusDialog, showSignUpOtp]);
 
   // Pre-check guest device quota on mount
   useEffect(() => {
@@ -298,6 +305,15 @@ const Auth = () => {
       return;
     }
     
+    if (!isLogin && !displayName.trim()) {
+      toast({
+        title: "Name Required",
+        description: "Please enter your name to create an account.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Require terms acceptance for signup
     if (!isLogin && !termsChecked) {
       toast({
@@ -330,7 +346,7 @@ const Auth = () => {
           description: "You've successfully logged in.",
         });
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -339,38 +355,20 @@ const Auth = () => {
         });
         if (error) throw error;
         
-        // Update the user_subscriptions table to mark terms as accepted
-        const { data } = await supabase.auth.getUser();
-        const newUser = data?.user;
-        if (newUser) {
-          await supabase
-            .from("user_subscriptions")
-            .upsert({
-              user_id: newUser.id,
-              terms_accepted: true,
-              terms_accepted_timestamp: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
-
-          // Give free credits to new users
-          const expiresAt = new Date("2100-01-01T00:00:00Z");
-
-          await supabase
-            .from("credit_purchases")
-            .insert({
-              user_id: newUser.id,
-              credits_total: 1,
-              credits_used: 0,
-              purchased_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-              plan_name: "Welcome Bonus",
-            });
+        // If session is null, it means email confirmation is required
+        if (signUpData.user && !signUpData.session) {
+          setShowSignUpOtp(true);
+          toast({
+            title: "Verification code sent!",
+            description: "Check your email for the 6-digit verification code.",
+          });
+          setLoading(false); // Stop loading so user can enter OTP
+          return;
         }
         
-        toast({
-          title: "Account created!",
-          description: "Congratulations!! You have got 1 FREE credit as a signing up bonus!!",
-        });
-
+        if (signUpData.user) {
+          await handleAfterVerification(signUpData.user);
+        }
       }
     } catch (error: any) {
       let message = error.message;
@@ -380,6 +378,75 @@ const Auth = () => {
       toast({
         title: "Error",
         description: message,
+        variant: "destructive",
+      });
+    } finally {
+      if (!showSignUpOtp) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleAfterVerification = async (newUser: any) => {
+    // Update the user_subscriptions table to mark terms as accepted
+    await supabase
+      .from("user_subscriptions")
+      .upsert({
+        user_id: newUser.id,
+        display_name: displayName || newUser.email?.split('@')[0],
+        terms_accepted: true,
+        terms_accepted_timestamp: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+    // Give free credits to new users
+    const expiresAt = new Date("2100-01-01T00:00:00Z");
+
+    await supabase
+      .from("credit_purchases")
+      .insert({
+        user_id: newUser.id,
+        credits_total: 5,
+        credits_used: 0,
+        purchased_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+        plan_name: "Welcome Bonus",
+      });
+    
+    setShowBonusDialog(true);
+  };
+
+  const handleVerifySignUpOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signUpOtp || signUpOtp.length < 6) {
+      toast({
+        title: "Invalid code",
+        description: "Please enter the verification code from your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: signUpOtp,
+        type: 'signup'
+      });
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        await handleAfterVerification(data.user);
+        toast({
+          title: "Email verified!",
+          description: "Your account is now ready.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Verification failed",
+        description: error.message || "Please check your code and try again.",
         variant: "destructive",
       });
     } finally {
@@ -839,6 +906,63 @@ const Auth = () => {
                 </form>
               )}
             </>
+          ) : showSignUpOtp ? (
+            // Sign Up OTP Verification
+            <>
+              <button
+                onClick={() => setShowSignUpOtp(false)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6 font-body text-sm"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to sign up
+              </button>
+
+              <h1 className="font-display text-2xl font-semibold text-center text-foreground mb-2">
+                Verify your email
+              </h1>
+              <p className="text-muted-foreground text-center mb-8 font-body text-sm">
+                Enter the 6-digit code sent to <strong>{email}</strong>
+              </p>
+
+              <form onSubmit={handleVerifySignUpOtp} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-otp" className="font-body font-medium">Verification Code</Label>
+                  <Input
+                    id="signup-otp"
+                    type="text"
+                    value={signUpOtp}
+                    onChange={(e) => setSignUpOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    required
+                    maxLength={6}
+                    className="h-12 bg-background/50 border-border/50 focus:border-primary font-body text-center text-xl tracking-widest"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || signUpOtp.length < 6}
+                  className="w-full h-12 gradient-primary border-0 font-body font-semibold"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    "Verify & Create Account"
+                  )}
+                </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleAuth}
+                    className="text-sm text-primary hover:text-primary/80 font-body transition-colors"
+                  >
+                    Resend code
+                  </button>
+                </div>
+              </form>
+            </>
           ) : (
             // Login/Signup Flow
             <>
@@ -859,6 +983,21 @@ const Auth = () => {
               </p>
 
               <form onSubmit={handleAuth} className="space-y-6">
+                {!isLogin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="font-body font-medium">Full Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="John Doe"
+                      required
+                      className="h-12 bg-background/50 border-border/50 focus:border-primary font-body"
+                    />
+                  </div>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="email" className="font-body font-medium">Email</Label>
                   <Input
@@ -1062,17 +1201,51 @@ const Auth = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Privacy Dialog */}
-      <Dialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
-        <DialogContent className="max-w-lg max-h-[80vh] p-0">
-          <DialogHeader className="p-6 pb-0">
-            <div className="flex items-center">
-              <DialogTitle className="font-display text-lg">Privacy Policy</DialogTitle>
+      {/* Welcome Bonus Dialog */}
+      <Dialog open={showBonusDialog} onOpenChange={setShowBonusDialog}>
+        <DialogContent className="max-w-sm p-0 overflow-hidden bg-card border-0 shadow-2xl rounded-3xl animate-scale-in">
+          <div className="relative p-8 flex flex-col items-center text-center gap-6">
+            {/* Celebration Background Effect */}
+            <div className="absolute inset-0 pointer-events-none opacity-20">
+              <div className="absolute top-0 left-1/4 w-32 h-32 bg-primary/30 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute bottom-0 right-1/4 w-32 h-32 bg-accent/30 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
             </div>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] px-6 pb-6">
-            <PrivacyContent />
-          </ScrollArea>
+
+            <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-lg transform rotate-6 animate-float">
+              <Sparkles className="w-10 h-10 text-primary-foreground" />
+            </div>
+            
+            <div className="space-y-2 relative z-10">
+              <h2 className="font-display text-2xl font-bold text-foreground">
+                Wooohoooo! 🥳
+              </h2>
+              <p className="text-muted-foreground font-body leading-relaxed">
+                Welcome to the style family, <span className="text-primary font-semibold">{displayName}</span>!
+              </p>
+            </div>
+
+            <div className="w-full bg-primary/5 rounded-2xl p-6 border border-primary/10 relative z-10">
+              <div className="text-4xl font-bold text-primary mb-1 animate-scale-in">
+                5
+              </div>
+              <div className="text-sm font-semibold text-primary/80 uppercase tracking-wider">
+                Credits Added
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 font-body">
+                You've received your signup bonus! Use them to scan and analyze your first outfits.
+              </p>
+            </div>
+
+            <Button 
+              onClick={() => {
+                setShowBonusDialog(false);
+                navigate("/analyze", { replace: true });
+              }}
+              className="w-full h-12 gradient-primary border-0 font-body font-semibold text-lg shadow-lg hover:shadow-primary/20 transition-all relative z-10"
+            >
+              Let's Start!
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
