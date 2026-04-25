@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationService } from "@/lib/NotificationService";
 
 interface AuthContextValue {
   user: User | null;
@@ -71,6 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsGuest(guestStatus);
 
         if (newSession?.user) {
+          // Sync user with NotificationService for push tokens
+          NotificationService.setUserId(newSession.user.id);
+          
+          if (Capacitor.isNativePlatform()) {
+            import("@revenuecat/purchases-capacitor").then(({ Purchases }) => {
+              Purchases.logIn({ appUserID: newSession.user.id }).catch(console.error);
+            });
+          }
+
           // Defer DB call to avoid deadlock
           setTimeout(() => {
             if (isMounted) {
@@ -78,13 +88,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }, 0);
         } else {
+          NotificationService.setUserId(null);
           setTermsAccepted(null);
+          
+          if (Capacitor.isNativePlatform()) {
+            import("@revenuecat/purchases-capacitor").then(({ Purchases }) => {
+              Purchases.logOut().catch(console.error);
+            });
+          }
         }
 
         // Only set loading false after handling the event
         if (event === "INITIAL_SESSION") {
           setIsLoading(false);
         }
+
       }
     );
 

@@ -97,33 +97,33 @@ function parseBatches(rows: any[]): CreditBatch[] {
 }
 
 async function fetchCreditsData(userId: string): Promise<CreditsState> {
-  // Fetch user subscription info (for display_name, save_scan_history)
+  // Fetch user subscription info (PRIMARY SOURCE for credits)
   const { data: subData } = await supabase
     .from("user_subscriptions")
-    .select("display_name, save_scan_history")
+    .select("credits_total, credits_used, display_name, save_scan_history")
     .eq("user_id", userId)
     .maybeSingle();
 
-  // Fetch all credit batches
+  // Fetch all credit batches for history display
   const { data: batchRows } = await supabase
     .from("credit_purchases")
     .select("*")
     .eq("user_id", userId)
-    .order("expires_at", { ascending: true });
+    .order("purchased_at", { ascending: false });
 
   const batches = parseBatches(batchRows || []);
-  const activeBatches = batches.filter((b) => b.creditsRemaining > 0);
-
-  const totalRemaining = activeBatches.reduce((sum, b) => sum + b.creditsRemaining, 0);
-  const totalCredits = batches.reduce((sum, b) => sum + b.creditsTotal, 0);
-  const totalUsed = batches.reduce((sum, b) => sum + b.creditsUsed, 0);
+  
+  // Use user_subscriptions as the authoritative source
+  const totalCredits = subData?.credits_total || 0;
+  const totalUsed = subData?.credits_used || 0;
+  const totalRemaining = Math.max(0, totalCredits - totalUsed);
 
   return {
     creditsTotal: totalCredits,
     creditsUsed: totalUsed,
     creditsRemaining: totalRemaining,
     batches,
-    isExpired: activeBatches.length === 0 && batches.length > 0,
+    isExpired: totalRemaining === 0 && batches.length > 0,
     displayName: subData?.display_name ?? null,
     saveScanHistory: subData?.save_scan_history ?? true,
   };
@@ -170,30 +170,38 @@ export function useCredits(userId: string | null) {
     if (!activeBatch) return false;
 
     try {
-      const newUsed = activeBatch.creditsUsed + 1;
-      const { error } = await supabase
+      const newBatchUsed = activeBatch.creditsUsed + 1;
+      const newTotalUsed = state.creditsUsed + 1;
+
+      // 1. Update the individual batch (Source of Truth for history)
+      const { error: batchError } = await supabase
         .from("credit_purchases")
-        .update({ credits_used: newUsed })
+        .update({ credits_used: newBatchUsed })
         .eq("id", activeBatch.id);
 
-      if (error) throw error;
+      if (batchError) throw batchError;
+
+      // 2. Update user_subscriptions (Primary Source for Balance)
+      const { error: subError } = await supabase
+        .from("user_subscriptions")
+        .update({ credits_used: newTotalUsed })
+        .eq("user_id", userId);
+
+      if (subError) throw subError;
 
       // Optimistically update the cache
       queryClient.setQueryData(["credits", userId], (prev: CreditsState | undefined) => {
         if (!prev) return prev;
         const updatedBatches = prev.batches.map((b) =>
           b.id === activeBatch.id
-            ? { ...b, creditsUsed: newUsed, creditsRemaining: Math.max(0, b.creditsTotal - newUsed) }
+            ? { ...b, creditsUsed: newBatchUsed, creditsRemaining: Math.max(0, b.creditsTotal - newBatchUsed) }
             : b
         );
-        const totalRemaining = updatedBatches
-          .filter((b) => !b.isExpired)
-          .reduce((sum, b) => sum + b.creditsRemaining, 0);
-
+        
         return {
           ...prev,
-          creditsUsed: prev.creditsUsed + 1,
-          creditsRemaining: totalRemaining,
+          creditsUsed: newTotalUsed,
+          creditsRemaining: Math.max(0, prev.creditsTotal - newTotalUsed),
           batches: updatedBatches,
         };
       });

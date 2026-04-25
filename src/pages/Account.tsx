@@ -181,7 +181,6 @@ const Account = () => {
 
       // Delete all user data using the authenticated client (RLS allows this)
       await supabase.from("scan_history").delete().eq("user_id", userId);
-      await supabase.from("upload_rate_limits").delete().eq("user_id", userId);
       await supabase.from("credit_purchases").delete().eq("user_id", userId);
       await supabase.from("user_subscriptions").delete().eq("user_id", userId);
 
