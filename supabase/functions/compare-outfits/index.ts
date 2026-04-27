@@ -124,76 +124,85 @@ serve(async (req) => {
     // Sanitize occasion
     const safeOccasion = occasion ? sanitizeText(occasion, MAX_OCCASION_LENGTH) : undefined;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")?.trim();
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Build content array with all images
-    const imageContent = images.map((imageBase64: string, index: number) => ({
-      type: "image_url",
-      image_url: {
-        url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
-      },
-    }));
-
     console.log(`Comparing ${images.length} outfits${safeOccasion ? ` for occasion: ${safeOccasion}` : ''}...`);
 
     const comparisonPrompt = getComparisonPrompt(safeOccasion);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `${comparisonPrompt}\n\nI have ${images.length} outfit photos to compare.${safeOccasion ? ` I'm planning to wear one for: ${safeOccasion}.` : ''} Please analyze each one and recommend the best outfit.`,
-              },
-              ...imageContent,
-            ],
-          },
-        ],
-      }),
+    // Format images for native Gemini API
+    const imageParts = images.map((img: string) => {
+      const mimeType = img.includes(';') ? img.split(';')[0].split(':')[1] : "image/jpeg";
+      const base64Data = img.includes('base64,') ? img.split('base64,')[1] : img;
+      return {
+        inline_data: {
+          mime_type: mimeType || "image/jpeg",
+          data: base64Data
+        }
+      };
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI Gateway error:", response.status, errorText);
+    const fallbackModels = [
+      'gemini-2.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-3-flash',
+      'gemini-1.5-flash'
+    ];
 
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a few moments." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    let response;
+    let errorData = null;
+
+    for (const model of fallbackModels) {
+      console.log(`Trying model: ${model}`);
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: comparisonPrompt },
+                { text: `I have ${images.length} outfit photos to compare.${safeOccasion ? ` I'm planning to wear one for: ${safeOccasion}.` : ''} Please analyze each one and recommend the best outfit.` },
+                ...imageParts
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+          }
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`Successfully generated content using model: ${model}`);
+        break;
+      } else {
+        errorData = await response.json();
+        console.warn(`Model ${model} failed with status ${response.status}`);
       }
+    }
 
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ error: "Failed to compare outfits" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!response || !response.ok) {
+      console.error('All Gemini API models failed. Last error:', errorData);
+      return new Response(JSON.stringify({ error: 'AI comparison failed across all models' }), {
+        status: response?.status || 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const data = await response.json();
-    const comparison = data.choices?.[0]?.message?.content;
+    const comparison = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!comparison) {
       console.error("No comparison content received");

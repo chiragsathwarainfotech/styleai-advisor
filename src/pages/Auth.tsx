@@ -259,7 +259,7 @@ const Auth = () => {
           await refetchTerms();
         }
         // Redirect to analyze once terms are handled
-        if (termsAccepted === true || termsAccepted === false) {
+        if (termsAccepted === true) {
           navigate("/analyze", { replace: true });
         }
       }

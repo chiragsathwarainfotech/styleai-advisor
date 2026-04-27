@@ -8,16 +8,14 @@ const corsHeaders = {
 
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX_UPLOADS = 25;
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB in characters (base64)
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_USERNAME_LENGTH = 100;
 
-// Sanitize text to prevent prompt injection
 function sanitizeText(str: string): string {
   if (!str) return '';
   return str.replace(/[<>"'`${}\\]/g, '').trim().slice(0, MAX_USERNAME_LENGTH);
 }
 
-// Validate base64 image
 function validateImage(imageBase64: string): { valid: boolean; error?: string } {
   if (!imageBase64) {
     return { valid: false, error: 'No image provided' };
@@ -25,7 +23,6 @@ function validateImage(imageBase64: string): { valid: boolean; error?: string } 
   if (imageBase64.length > MAX_IMAGE_SIZE) {
     return { valid: false, error: 'Image too large. Maximum size is 10MB.' };
   }
-  // Check for valid base64 data URL pattern
   if (!imageBase64.startsWith('data:image/')) {
     return { valid: false, error: 'Invalid image format' };
   }
@@ -34,7 +31,7 @@ function validateImage(imageBase64: string): { valid: boolean; error?: string } 
 
 async function checkRateLimit(supabase: any, userId: string): Promise<{ allowed: boolean; count: number }> {
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString();
-  
+
   const { count, error } = await supabase
     .from('upload_rate_limits')
     .select('*', { count: 'exact', head: true })
@@ -69,10 +66,10 @@ async function recordUpload(supabase: any, userId: string): Promise<void> {
 
 const getFashionPrompt = (userName?: string) => {
   const safeUserName = userName ? sanitizeText(userName) : '';
-  const greeting = safeUserName 
+  const greeting = safeUserName
     ? `You are an expert AI fashion stylist. The user's name is ${safeUserName}, so address them by name in a friendly way.`
     : `You are an expert AI fashion stylist.`;
-  
+
   return `${greeting}
 Analyze the outfit in the uploaded photo. Provide:
 
@@ -102,10 +99,8 @@ serve(async (req) => {
   }
 
   try {
-    // Authenticate user via JWT
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      console.error('Missing or invalid authorization header');
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -115,17 +110,17 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    // Create client for auth verification
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')?.trim();
+    if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
+
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-    
+
     if (authError || !user) {
-      console.error('User authentication failed:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -133,11 +128,8 @@ serve(async (req) => {
     }
 
     const userId = user.id;
-    console.log(`Authenticated user: ${userId}`);
-
     const { imageBase64, userName } = await req.json();
-    
-    // Validate image
+
     const imageValidation = validateImage(imageBase64);
     if (!imageValidation.valid) {
       return new Response(JSON.stringify({ error: imageValidation.error }), {
@@ -146,24 +138,13 @@ serve(async (req) => {
       });
     }
 
-    // Sanitize userName
     const safeUserName = userName ? sanitizeText(userName) : undefined;
-
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
-
-    // Use service role client for rate limiting
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check rate limit using authenticated userId
-    const { allowed, count } = await checkRateLimit(supabase, userId);
-    console.log(`Rate limit check for user ${userId}: ${count}/${RATE_LIMIT_MAX_UPLOADS} uploads in last 60s`);
-    
+    const { allowed } = await checkRateLimit(supabase, userId);
+
     if (!allowed) {
-      console.log(`Rate limit exceeded for user ${userId}`);
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'rate_limit_exceeded',
         message: "You're uploading too fast. Please wait a moment and try again."
       }), {
@@ -172,75 +153,74 @@ serve(async (req) => {
       });
     }
 
-    // Record this upload
     await recordUpload(supabase, userId);
 
-    console.log('Analyzing outfit with AI...', safeUserName ? `for ${safeUserName}` : '');
+    // Extract raw base64 and mime type
+    const mimeType = imageBase64.split(';')[0].split(':')[1];
+    const base64Data = imageBase64.split('base64,')[1];
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: getFashionPrompt(safeUserName)
-          },
-          {
-            role: 'user',
-            content: [
+    const fallbackModels = [
+      'gemini-2.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-3-flash',
+      'gemini-1.5-flash'
+    ];
+
+    let response;
+    let errorData = null;
+
+    for (const model of fallbackModels) {
+      console.log(`Trying model: ${model}`);
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: getFashionPrompt(safeUserName) },
               {
-                type: 'text',
-                text: 'Please analyze this outfit photo and provide your expert fashion advice.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageBase64
+                inline_data: {
+                  mime_type: mimeType || "image/jpeg",
+                  data: base64Data
                 }
               }
             ]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
           }
-        ],
-      }),
-    });
+        }),
+      });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.error('Rate limit exceeded');
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (response.ok) {
+        console.log(`Successfully generated content using model: ${model}`);
+        break;
+      } else {
+        errorData = await response.json();
+        console.warn(`Model ${model} failed with status ${response.status}`);
       }
-      if (response.status === 402) {
-        console.error('Payment required');
-        return new Response(JSON.stringify({ error: 'AI credits depleted. Please add credits to continue.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
-      throw new Error(`AI Gateway error: ${response.status}`);
+    }
+
+    if (!response || !response.ok) {
+      console.error('All Gemini API models failed. Last error:', errorData);
+      return new Response(JSON.stringify({ error: 'AI analysis failed across all models' }), {
+        status: response?.status || 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const data = await response.json();
-    const analysis = data.choices?.[0]?.message?.content;
-
-    console.log('Analysis complete');
+    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     return new Response(JSON.stringify({ analysis }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (error: unknown) {
     console.error('Error in analyze-outfit:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to analyze outfit';
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
