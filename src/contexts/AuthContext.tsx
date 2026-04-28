@@ -45,11 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const keepSignedIn = localStorage.getItem("keepSignedIn");
       const tempSession = sessionStorage.getItem("tempSession");
       
-      // If user didn't want to keep signed in and this is a new session (no tempSession marker)
-      // then sign them out
       if (!keepSignedIn && !tempSession) {
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         if (existingSession) {
+          await NotificationService.removeToken();
           await supabase.auth.signOut();
         }
       }

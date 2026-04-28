@@ -21,7 +21,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const TermsContent = () => (
   <div className="text-xs text-foreground space-y-3">
     <p className="text-muted-foreground text-xs">Last updated: December 18, 2025</p>
-    
+
     <p>
       Welcome to Styloren. By accessing or using the Styloren mobile application ("App"), you agree to comply with and be bound by these Terms & Conditions ("Terms"). If you do not agree, please do not use the App.
     </p>
@@ -105,7 +105,7 @@ const TermsContent = () => (
 const PrivacyContent = () => (
   <div className="space-y-3 text-xs text-foreground font-body">
     <p className="text-muted-foreground text-xs">Last updated: December 18, 2025</p>
-    
+
     <p>
       Styloren ("we", "our", or "us") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, store, and protect your data when you use the Styloren mobile application.
     </p>
@@ -113,7 +113,7 @@ const PrivacyContent = () => (
     <section>
       <h2 className="font-display text-sm font-semibold mb-2">1. Information We Collect</h2>
       <p className="mb-2">When you use Styloren, we may collect the following information:</p>
-      
+
       <h3 className="font-semibold mb-1">a) Information You Provide</h3>
       <ul className="list-disc list-inside space-y-0.5 mb-2 text-muted-foreground">
         <li>Email address or login information</li>
@@ -220,7 +220,7 @@ const Auth = () => {
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
   const [guestQuotaUsed, setGuestQuotaUsed] = useState(false);
   const [guestQuotaChecking, setGuestQuotaChecking] = useState(true);
-  
+
   // Forgot password states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState<"email" | "otp" | "newPassword">("email");
@@ -232,34 +232,49 @@ const Auth = () => {
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
-  
+
   // Sign up OTP states
   const [showSignUpOtp, setShowSignUpOtp] = useState(false);
   const [signUpOtp, setSignUpOtp] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [showBonusDialog, setShowBonusDialog] = useState(false);
-  
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Redirect logged-in users (terms are accepted during signup, so skip the gate)
   useEffect(() => {
     const autoAcceptAndRedirect = async () => {
-      // Only redirect if NOT a guest and NOT showing the bonus dialog
-      if (!isLoading && user && !isGuest && !showBonusDialog && !showSignUpOtp) {
-        // If terms not yet accepted, auto-accept them (since signup already requires acceptance)
+      // Only redirect if NOT showing the bonus dialog and NOT in the middle of OTP verification
+      if (!isLoading && user && !showBonusDialog && !showSignUpOtp) {
+        console.log("[Auth] Checking redirect for user:", user.id, "isGuest:", isGuest);
+        
+        // If it's a guest, we allow immediate entry (terms handled in handleGuestSignIn)
+        if (isGuest) {
+          console.log("[Auth] Guest detected, redirecting to /analyze");
+          navigate("/analyze", { replace: true });
+          return;
+        }
+
+        // For registered users, ensure terms are handled
         if (termsAccepted === false) {
-          await supabase
+          console.log("[Auth] Terms not accepted, auto-accepting...");
+          const { error } = await supabase
             .from("user_subscriptions")
             .upsert({
               user_id: user.id,
               terms_accepted: true,
               terms_accepted_timestamp: new Date().toISOString(),
             }, { onConflict: 'user_id' });
-          await refetchTerms();
+          
+          if (!error) {
+            await refetchTerms();
+          }
         }
-        // Redirect to analyze once terms are handled
+        
+        // Redirect to analyze once terms are handled or if they were already accepted
         if (termsAccepted === true) {
+          console.log("[Auth] Terms accepted, redirecting to /analyze");
           navigate("/analyze", { replace: true });
         }
       }
@@ -295,7 +310,7 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!isOnline()) {
       toast({
         title: "Connection Error",
@@ -304,7 +319,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     if (!isLogin && !displayName.trim()) {
       toast({
         title: "Name Required",
@@ -313,7 +328,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     // Require terms acceptance for signup
     if (!isLogin && !termsChecked) {
       toast({
@@ -323,7 +338,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setLoading(true);
 
     // Save the "keep signed in" preference
@@ -354,7 +369,7 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        
+
         // If session is null, it means email confirmation is required
         if (signUpData.user && !signUpData.session) {
           setShowSignUpOtp(true);
@@ -365,7 +380,7 @@ const Auth = () => {
           setLoading(false); // Stop loading so user can enter OTP
           return;
         }
-        
+
         if (signUpData.user) {
           await handleAfterVerification(signUpData.user);
         }
@@ -388,31 +403,51 @@ const Auth = () => {
   };
 
   const handleAfterVerification = async (newUser: any) => {
-    // Update the user_subscriptions table to mark terms as accepted
-    await supabase
-      .from("user_subscriptions")
-      .upsert({
-        user_id: newUser.id,
-        display_name: displayName || newUser.email?.split('@')[0],
-        terms_accepted: true,
-        terms_accepted_timestamp: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-
-    // Give free credits to new users
-    const expiresAt = new Date("2100-01-01T00:00:00Z");
-
-    await supabase
-      .from("credit_purchases")
-      .insert({
-        user_id: newUser.id,
-        credits_total: 5,
-        credits_used: 0,
-        purchased_at: new Date().toISOString(),
-        expires_at: expiresAt.toISOString(),
-        plan_name: "Welcome Bonus",
-      });
+    console.log("[Auth] Verifying and adding welcome credits for user:", newUser.id);
     
-    setShowBonusDialog(true);
+    try {
+      // 1. Update the user_subscriptions table
+      const { error: subError } = await supabase
+        .from("user_subscriptions")
+        .upsert({
+          user_id: newUser.id,
+          display_name: displayName || newUser.email?.split('@')[0],
+          credits_total: 5,
+          credits_used: 0,
+          terms_accepted: true,
+          terms_accepted_timestamp: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (subError) {
+        console.error("[Auth] Error updating subscription:", subError);
+        // We continue anyway to try and give credits
+      }
+
+      // 2. Give free credits to new users in credit_purchases
+      const expiresAt = new Date("2100-01-01T00:00:00Z");
+
+      const { error: creditError } = await supabase
+        .from("credit_purchases")
+        .insert({
+          user_id: newUser.id,
+          credits_total: 5,
+          credits_used: 0,
+          purchased_at: new Date().toISOString(),
+          expires_at: expiresAt.toISOString(),
+          plan_name: "Welcome Bonus",
+        });
+
+      if (creditError) {
+        console.error("[Auth] Error adding welcome credits:", creditError);
+      }
+
+      console.log("[Auth] Welcome credits process complete.");
+      setShowBonusDialog(true);
+    } catch (err) {
+      console.error("[Auth] Unexpected error in handleAfterVerification:", err);
+      // Even if it fails, we show the dialog so they can proceed to the app
+      setShowBonusDialog(true);
+    }
   };
 
   const handleVerifySignUpOtp = async (e: React.FormEvent) => {
@@ -425,7 +460,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.verifyOtp({
@@ -433,9 +468,9 @@ const Auth = () => {
         token: signUpOtp,
         type: 'signup'
       });
-      
+
       if (error) throw error;
-      
+
       if (data.user) {
         await handleAfterVerification(data.user);
         toast({
@@ -456,7 +491,7 @@ const Auth = () => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!isOnline()) {
       toast({
         title: "Connection Error",
@@ -465,7 +500,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     if (!email) {
       toast({
         title: "Email required",
@@ -474,15 +509,15 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
         body: { action: "request", email },
       });
-      
+
       if (response.error) throw response.error;
-      
+
       const data = response.data;
       if (data.success) {
         setForgotPasswordStep("otp");
@@ -518,15 +553,15 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
         body: { action: "verify", email, otp },
       });
-      
+
       if (response.error) throw response.error;
-      
+
       const data = response.data;
       if (!data.success) {
         toast({
@@ -536,7 +571,7 @@ const Auth = () => {
         });
         return;
       }
-      
+
       setVerificationToken(data.token);
       setForgotPasswordStep("newPassword");
       toast({
@@ -556,7 +591,7 @@ const Auth = () => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Password validation
     if (newPassword.length < 8) {
       toast({
@@ -566,12 +601,12 @@ const Auth = () => {
       });
       return;
     }
-    
+
     // Check for at least one uppercase, one lowercase, and one number
     const hasUppercase = /[A-Z]/.test(newPassword);
     const hasLowercase = /[a-z]/.test(newPassword);
     const hasNumber = /[0-9]/.test(newPassword);
-    
+
     if (!hasUppercase || !hasLowercase || !hasNumber) {
       toast({
         title: "Password too weak",
@@ -580,7 +615,7 @@ const Auth = () => {
       });
       return;
     }
-    
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Passwords don't match",
@@ -589,20 +624,20 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
-        body: { action: "reset", email, newPassword },
+        body: { action: "reset", email, newPassword, token: verificationToken },
       });
-      
+
       if (response.error) throw response.error;
-      
+
       const data = response.data;
       if (!data.success) {
         throw new Error(data.message || "Failed to reset password");
       }
-      
+
       // Reset states and go back to login with success message
       setShowForgotPassword(false);
       setForgotPasswordStep("email");
@@ -612,7 +647,7 @@ const Auth = () => {
       setVerificationToken(null);
       setIsLogin(true);
       setResetSuccessMessage("Password reset successful! Kindly re-login with your new password.");
-      
+
       // Clear success message after 10 seconds
       setTimeout(() => setResetSuccessMessage(null), 10000);
     } catch (error: any) {
@@ -648,17 +683,6 @@ const Auth = () => {
     setLoading(true);
     try {
       const deviceId = await getPersistentDeviceId();
-      
-      // 1. Check if device has already used guest quota
-      const alreadyUsed = await hasUsedGuestQuota(deviceId);
-      if (alreadyUsed) {
-        toast({
-          title: "Guest Limit Reached",
-          description: "This device has already used the Guest Sign-in. Please sign in or create an account to continue.",
-          variant: "destructive",
-        });
-        return;
-      }
 
       // 2. Perform Guest Sign-in
       const response = await signInAsGuest(deviceId);
@@ -676,12 +700,14 @@ const Auth = () => {
         throw new Error("Guest sign-in succeeded but no user was returned.");
       }
 
-      // 4. Mark device as used in user_subscriptions
+      // 4. Mark device as used in user_subscriptions and give 3 free credits
       const { error: subError } = await supabase
         .from("user_subscriptions")
         .upsert({
           user_id: newUser.id,
           display_name: `guest_${deviceId}`,
+          credits_total: 3,
+          credits_used: 0,
           terms_accepted: true,
           terms_accepted_timestamp: new Date().toISOString(),
         }, { onConflict: 'user_id' });
@@ -716,6 +742,9 @@ const Auth = () => {
         title: "Welcome, Guest!",
         description: "You've received 3 FREE credits to try Styloren!",
       });
+
+      // Navigate to the app
+      navigate("/analyze", { replace: true });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
       toast({
@@ -974,7 +1003,7 @@ const Auth = () => {
                   </AlertDescription>
                 </Alert>
               )}
-              
+
               <h1 className="font-display text-3xl font-semibold text-center text-foreground mb-2">
                 {isLogin ? "Welcome back" : "Create account"}
               </h1>
@@ -997,7 +1026,7 @@ const Auth = () => {
                     />
                   </div>
                 )}
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="email" className="font-body font-medium">Email</Label>
                   <Input
@@ -1041,11 +1070,10 @@ const Auth = () => {
                   <button
                     type="button"
                     onClick={() => setKeepSignedIn(!keepSignedIn)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      keepSignedIn 
-                        ? "bg-primary border-primary" 
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${keepSignedIn
+                        ? "bg-primary border-primary"
                         : "border-border hover:border-primary/50"
-                    }`}
+                      }`}
                   >
                     {keepSignedIn && (
                       <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1064,11 +1092,10 @@ const Auth = () => {
                     <button
                       type="button"
                       onClick={() => setTermsChecked(!termsChecked)}
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
-                        termsChecked 
-                          ? "bg-primary border-primary" 
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${termsChecked
+                          ? "bg-primary border-primary"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                     >
                       {termsChecked && (
                         <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1214,7 +1241,7 @@ const Auth = () => {
             <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-lg transform rotate-6 animate-float">
               <Sparkles className="w-10 h-10 text-primary-foreground" />
             </div>
-            
+
             <div className="space-y-2 relative z-10">
               <h2 className="font-display text-2xl font-bold text-foreground">
                 Wooohoooo! 🥳
@@ -1236,7 +1263,7 @@ const Auth = () => {
               </p>
             </div>
 
-            <Button 
+            <Button
               onClick={() => {
                 setShowBonusDialog(false);
                 navigate("/analyze", { replace: true });

@@ -39,17 +39,37 @@ async function getAccessToken(serviceAccount: any) {
 
 import { GoogleAuth } from "https://esm.sh/google-auth-library@8.7.0";
 
-async function sendPushNotification(userId: string, title: string, body: string, supabase: any) {
+async function sendPushNotification(userIdOrEmail: string, title: string, body: string, supabase: any) {
   try {
+    let targetUserId = userIdOrEmail;
+    
+    // Check if it's an email (doesn't look like a UUID)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userIdOrEmail);
+    
+    if (!isUuid && userIdOrEmail.includes('@')) {
+      console.log(`[Push] Resolving email ${userIdOrEmail} to user ID...`);
+      // Try to find user by email in auth.users (requires admin client)
+      const { data: userData, error: userError } = await supabase.auth.admin.listUsers();
+      if (!userError && userData?.users) {
+        const foundUser = userData.users.find(u => u.email?.toLowerCase() === userIdOrEmail.toLowerCase());
+        if (foundUser) {
+          targetUserId = foundUser.id;
+          console.log(`[Push] Resolved ${userIdOrEmail} to ${targetUserId}`);
+        }
+      }
+    }
+
     const { data: tokens, error: tokenError } = await supabase
       .from('user_push_tokens')
       .select('token')
-      .eq('user_id', userId);
+      .eq('user_id', targetUserId);
 
     if (tokenError || !tokens || tokens.length === 0) {
-      console.log(`[Push] No tokens found for user ${userId}`);
+      console.log(`[Push] No tokens found for user ${targetUserId} (original: ${userIdOrEmail})`);
       return;
     }
+
+    console.log(`[Push] Sending notification to ${tokens.length} devices for user ${targetUserId}`);
 
     const firebaseConfigStr = Deno.env.get('FIREBASE_CONFIG');
     if (!firebaseConfigStr) {
@@ -250,8 +270,38 @@ serve(async (req) => {
 
       // 3. Update IAP transaction record (THIS CLOSES THE POPUP)
       try {
+        // Resolve DB user ID
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appUserId);
-        const dbUserId = isUuid ? appUserId : null;
+        let dbUserId = isUuid ? appUserId : null;
+
+        // If not a UUID, try to find in iap_transactions or guest_users or by email
+        if (!dbUserId) {
+          console.log(`[Webhook] appUserId ${appUserId} is not a UUID, attempting lookup...`);
+          
+          // 1. Try iap_transactions
+          const { data: txData } = await supabase
+            .from('iap_transactions')
+            .select('user_id')
+            .eq('app_user_id', appUserId)
+            .maybeSingle();
+          
+          if (txData?.user_id) {
+            dbUserId = txData.user_id;
+            console.log(`[Webhook] Found user ID ${dbUserId} in iap_transactions`);
+          } else if (appUserId.includes('@')) {
+            // 2. Try auth users by email
+            const { data: userData } = await supabase.auth.admin.listUsers();
+            const foundUser = userData?.users?.find(u => u.email?.toLowerCase() === appUserId.toLowerCase());
+            if (foundUser) {
+              dbUserId = foundUser.id;
+              console.log(`[Webhook] Found user ID ${dbUserId} by email lookup`);
+            }
+          }
+        }
+
+        if (!dbUserId) {
+          throw new Error(`Could not resolve user ID for appUserId: ${appUserId}`);
+        }
 
         // First, try to find by transaction_id
         const { data: existingTx } = await supabase

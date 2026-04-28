@@ -95,6 +95,17 @@ export const NotificationService = {
     }
   },
 
+  async removeToken() {
+    if (this._currentToken) {
+      try {
+        console.log('[Push Diagnostics] Removing token for user on logout');
+        await supabase.from('user_push_tokens').delete().eq('token', this._currentToken);
+      } catch (e) {
+        console.error('[Push Diagnostics] Error removing token:', e);
+      }
+    }
+  },
+
   async registerNotifications() {
     console.log('[Push Diagnostics] checking permissions...');
     let permStatus = await PushNotifications.checkPermissions();

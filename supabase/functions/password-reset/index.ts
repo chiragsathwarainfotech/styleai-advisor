@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,21 +88,42 @@ async function sendEmailViaSendGrid(
   }
 }
 
-const handler = async (req: Request): Promise<Response> => {
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, email, otp, newPassword } = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("Error parsing request body:", e);
+      return new Response(
+        JSON.stringify({ error: "Invalid request body" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const { action, email, otp, newPassword, token } = body;
     
     // Validate action
     if (!action || !['request', 'verify', 'reset'].includes(action)) {
+      console.error(`Invalid action received: ${action}`);
       return new Response(
         JSON.stringify({ error: "Invalid action" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -140,13 +161,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       if (rateLimitData && rateLimitData.length >= 3) {
-        console.log(`Rate limit exceeded for email`);
+        console.log(`Rate limit exceeded for email: ${normalizedEmail}`);
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
+            success: false, 
+            message: "Too many requests. Please try again in an hour." 
           }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
@@ -174,14 +195,13 @@ const handler = async (req: Request): Promise<Response> => {
       );
 
       if (!userExists) {
-        console.log(`Email not found`);
-        // Return success to prevent email enumeration
+        console.log(`Email not found in auth.users: ${normalizedEmail}`);
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
+            success: false, 
+            message: "This email address is not registered." 
           }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
@@ -234,13 +254,12 @@ const handler = async (req: Request): Promise<Response> => {
       
       if (!emailResult.success) {
         console.error("Email sending failed:", emailResult.error);
-        // Still return success to prevent information leakage
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
+            success: false, 
+            message: `Failed to send email: ${emailResult.error}` 
           }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
@@ -344,11 +363,12 @@ const handler = async (req: Request): Promise<Response> => {
 
       const normalizedEmail = email.toLowerCase().trim();
 
-      // Find a valid (unused) OTP record for this email (the one that was verified)
+      // Find a valid (unused) OTP record for this email that matches the token
       const { data: otpData, error: otpError } = await supabase
         .from("password_reset_otps")
         .select("*")
         .eq("email", normalizedEmail)
+        .eq("otp_code", token)
         .eq("used", false)
         .gte("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
@@ -424,6 +444,4 @@ const handler = async (req: Request): Promise<Response> => {
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
-};
-
-serve(handler);
+});

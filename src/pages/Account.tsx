@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationService } from "@/lib/NotificationService";
 import {
   ArrowLeft,
   User,
@@ -86,6 +87,7 @@ const Account = () => {
   const { deleteAllScans, totalCount } = useScanHistory(user?.id, hasCredits);
 
   const handleLogout = async () => {
+    await NotificationService.removeToken();
     await supabase.auth.signOut();
     navigate("/");
   };
@@ -229,21 +231,25 @@ const Account = () => {
 
   if (!user) return null;
 
+  const isGuest = !!user && (user.is_anonymous === true || user.email?.endsWith("@guest.styloren.com") === true);
+
   const menuSections = [
     {
       title: "Account Info",
       items: [
-        {
-          icon: Mail,
-          label: "Email",
-          value: user.email,
-          onClick: undefined,
-        },
-        {
-          icon: Lock,
-          label: "Change Password",
-          onClick: () => setShowPasswordDialog(true),
-        },
+        ...(!isGuest ? [
+          {
+            icon: Mail,
+            label: "Email",
+            value: user.email,
+            onClick: undefined,
+          },
+          {
+            icon: Lock,
+            label: "Change Password",
+            onClick: () => setShowPasswordDialog(true),
+          }
+        ] : []),
         {
           icon: LogOut,
           label: "Log Out",
@@ -260,14 +266,14 @@ const Account = () => {
           label: "Scan History",
           onClick: () => navigate("/scan-history"),
         },
-        {
+        ...(!isGuest ? [{
           icon: CreditCard,
           label: "Purchase History",
           onClick: () => navigate("/purchase-history"),
-        },
+        }] : []),
       ],
     },
-    {
+    ...(!isGuest ? [{
       title: "Privacy Settings",
       items: [
         {
@@ -287,7 +293,7 @@ const Account = () => {
           value: totalCount === 0 ? "No scans" : `${totalCount} scan${totalCount !== 1 ? 's' : ''}`,
         },
       ],
-    },
+    }] : []),
     {
       title: "Support",
       items: [
@@ -336,7 +342,7 @@ const Account = () => {
         },
       ],
     },
-    {
+    ...(!isGuest ? [{
       title: "Danger Zone",
       items: [
         {
@@ -347,7 +353,7 @@ const Account = () => {
           description: "Permanently delete your account and all data. This action cannot be undone.",
         },
       ],
-    },
+    }] : []),
   ];
 
   return (

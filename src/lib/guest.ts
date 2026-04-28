@@ -33,13 +33,13 @@ export const getPersistentDeviceId = async (): Promise<string> => {
   // Web fallback or failure fallback
   const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
   let deviceId = value || localStorage.getItem(DEVICE_ID_KEY);
-  
+
   if (!deviceId) {
     deviceId = generateUUID();
     await Preferences.set({ key: DEVICE_ID_KEY, value: deviceId });
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
-  
+
   return deviceId;
 };
 
@@ -52,7 +52,7 @@ export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
   // PRIMARY: Check persistent preferences
   const { value } = await Preferences.get({ key: GUEST_USED_KEY });
   const localFlag = value || localStorage.getItem(GUEST_USED_KEY);
-  
+
   if (localFlag === "true") {
     return true;
   }
@@ -101,24 +101,24 @@ export const signInAsGuest = async (deviceId: string) => {
     const { data, error } = await supabase.auth.signInAnonymously();
     let authData = data;
     let authError = error;
-    
+
     if (authError) {
       console.error("[Guest] signInAnonymously failed, attempting fallback:", authError);
-      
+
       // Fallback: Create a silent account with a random password
       const guestEmail = `guest_${deviceId.substring(0, 8)}_${Math.floor(Math.random() * 10000)}@guest.styloren.com`;
       const guestPassword = generateUUID();
-      
+
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: guestEmail,
         password: guestPassword,
       });
-      
+
       if (signUpError) throw signUpError;
       authData = signUpData;
       authError = null;
     }
-    
+
     if (authData?.user) {
       console.log("[Guest] Recording guest entry in guest_users table");
       // Record in dedicated guest_users table
@@ -126,10 +126,10 @@ export const signInAsGuest = async (deviceId: string) => {
         device_id: deviceId,
         user_id: authData.user.id
       }, { onConflict: 'device_id' });
-      
+
       await markGuestUsed();
     }
-    
+
     return { data: authData, error: authError };
   } catch (err: any) {
     console.error("[Guest] Guest Sign-in error:", err);
