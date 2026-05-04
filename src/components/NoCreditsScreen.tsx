@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Lock, CircleUser } from "lucide-react";
 
@@ -11,10 +12,21 @@ interface NoCreditsScreenProps {
 export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsScreenProps) {
   const navigate = useNavigate();
 
+  // Sign the guest out before sending them to /auth — otherwise the Auth
+  // page's logged-in redirect bounces them straight back to /analyze.
+  const goToAuthAsGuest = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("[NoCreditsScreen] sign-out failed:", e);
+    }
+    navigate("/auth");
+  };
+
   // Guest variant: nudge to sign in
   if (isGuest) {
     return (
-      <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated">
+      <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 shadow-elevated">
         <div className="text-center py-8">
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Lock className="w-8 h-8 text-primary" />
@@ -28,7 +40,7 @@ export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsS
           <div className="flex flex-col gap-3 max-w-xs mx-auto">
             <Button
               id="guest-nocredits-signin-btn"
-              onClick={() => navigate("/auth")}
+              onClick={goToAuthAsGuest}
               className="w-full gradient-primary border-0 h-12"
             >
               <CircleUser className="w-5 h-5 mr-2" />

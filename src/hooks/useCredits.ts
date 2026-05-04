@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Capacitor } from "@capacitor/core";
+import { useAuth } from "@/contexts/AuthContext";
 import { useIOSLogic } from "@/lib/platform";
 
 export interface CreditPlan {
@@ -78,7 +78,6 @@ export interface CreditsState {
 }
 
 function parseBatches(rows: any[]): CreditBatch[] {
-  const now = new Date();
   return rows.map((row) => {
     const expiresAt = new Date(row.expires_at);
     const isExpired = false; // Expiration disabled
@@ -96,15 +95,41 @@ function parseBatches(rows: any[]): CreditBatch[] {
   });
 }
 
-async function fetchCreditsData(userId: string): Promise<CreditsState> {
-  // Fetch user subscription info (PRIMARY SOURCE for credits)
+async function fetchGuestCredits(userId: string): Promise<CreditsState> {
+  const { data: guestData } = await supabase
+    .from("guest_users")
+    .select("credits_total, credits_used")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { data: subData } = await supabase
+    .from("user_subscriptions")
+    .select("display_name, save_scan_history")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const totalCredits = guestData?.credits_total ?? 0;
+  const totalUsed = guestData?.credits_used ?? 0;
+  const totalRemaining = Math.max(0, totalCredits - totalUsed);
+
+  return {
+    creditsTotal: totalCredits,
+    creditsUsed: totalUsed,
+    creditsRemaining: totalRemaining,
+    batches: [], // Guests don't have batch history.
+    isExpired: false,
+    displayName: subData?.display_name ?? null,
+    saveScanHistory: subData?.save_scan_history ?? true,
+  };
+}
+
+async function fetchUserCredits(userId: string): Promise<CreditsState> {
   const { data: subData } = await supabase
     .from("user_subscriptions")
     .select("credits_total, credits_used, display_name, save_scan_history")
     .eq("user_id", userId)
     .maybeSingle();
 
-  // Fetch all credit batches for history display
   const { data: batchRows } = await supabase
     .from("credit_purchases")
     .select("*")
@@ -112,8 +137,7 @@ async function fetchCreditsData(userId: string): Promise<CreditsState> {
     .order("purchased_at", { ascending: false });
 
   const batches = parseBatches(batchRows || []);
-  
-  // Use user_subscriptions as the authoritative source
+
   const totalCredits = subData?.credits_total || 0;
   const totalUsed = subData?.credits_used || 0;
   const totalRemaining = Math.max(0, totalCredits - totalUsed);
@@ -131,13 +155,15 @@ async function fetchCreditsData(userId: string): Promise<CreditsState> {
 
 export function useCredits(userId: string | null) {
   const queryClient = useQueryClient();
+  const { isGuest } = useAuth();
 
   const { data: credits, isLoading } = useQuery({
-    queryKey: ["credits", userId],
-    queryFn: () => fetchCreditsData(userId!),
+    queryKey: ["credits", userId, isGuest ? "guest" : "user"],
+    queryFn: () =>
+      isGuest ? fetchGuestCredits(userId!) : fetchUserCredits(userId!),
     enabled: !!userId,
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes to prevent flicker on navigation
-    gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
   });
 
   const defaultCredits: CreditsState = {
@@ -156,55 +182,66 @@ export function useCredits(userId: string | null) {
     queryClient.invalidateQueries({ queryKey: ["credits", userId] });
   }, [queryClient, userId]);
 
-  const canUseCredit = (): boolean => {
-    return state.creditsRemaining > 0;
-  };
+  const canUseCredit = (): boolean => state.creditsRemaining > 0;
 
-  // Deduct 1 credit using FIFO (earliest expiring batch first)
+  // Deduct 1 credit. Guest balance lives on guest_users; normal user balance
+  // lives on user_subscriptions (with credit_purchases tracking the active
+  // batch for FIFO purchase history).
   const useCredit = async (): Promise<boolean> => {
     if (!userId) return false;
     if (!canUseCredit()) return false;
 
-    // Find the first batch with remaining credits (effectively FIFO)
-    const activeBatch = state.batches.find((b) => b.creditsRemaining > 0);
-    if (!activeBatch) return false;
-
     try {
-      const newBatchUsed = activeBatch.creditsUsed + 1;
       const newTotalUsed = state.creditsUsed + 1;
 
-      // 1. Update the individual batch (Source of Truth for history)
-      const { error: batchError } = await supabase
-        .from("credit_purchases")
-        .update({ credits_used: newBatchUsed })
-        .eq("id", activeBatch.id);
+      if (isGuest) {
+        const { error } = await supabase
+          .from("guest_users")
+          .update({ credits_used: newTotalUsed })
+          .eq("user_id", userId);
+        if (error) throw error;
+      } else {
+        const activeBatch = state.batches.find((b) => b.creditsRemaining > 0);
+        if (activeBatch) {
+          const { error: batchError } = await supabase
+            .from("credit_purchases")
+            .update({ credits_used: activeBatch.creditsUsed + 1 })
+            .eq("id", activeBatch.id);
+          if (batchError) throw batchError;
+        }
 
-      if (batchError) throw batchError;
+        const { error: subError } = await supabase
+          .from("user_subscriptions")
+          .update({ credits_used: newTotalUsed })
+          .eq("user_id", userId);
+        if (subError) throw subError;
+      }
 
-      // 2. Update user_subscriptions (Primary Source for Balance)
-      const { error: subError } = await supabase
-        .from("user_subscriptions")
-        .update({ credits_used: newTotalUsed })
-        .eq("user_id", userId);
-
-      if (subError) throw subError;
-
-      // Optimistically update the cache
-      queryClient.setQueryData(["credits", userId], (prev: CreditsState | undefined) => {
-        if (!prev) return prev;
-        const updatedBatches = prev.batches.map((b) =>
-          b.id === activeBatch.id
-            ? { ...b, creditsUsed: newBatchUsed, creditsRemaining: Math.max(0, b.creditsTotal - newBatchUsed) }
-            : b
-        );
-        
-        return {
-          ...prev,
-          creditsUsed: newTotalUsed,
-          creditsRemaining: Math.max(0, prev.creditsTotal - newTotalUsed),
-          batches: updatedBatches,
-        };
-      });
+      queryClient.setQueryData(
+        ["credits", userId, isGuest ? "guest" : "user"],
+        (prev: CreditsState | undefined) => {
+          if (!prev) return prev;
+          const updatedBatches = isGuest
+            ? prev.batches
+            : prev.batches.map((b) => {
+                const active = prev.batches.find((x) => x.creditsRemaining > 0);
+                if (active && b.id === active.id) {
+                  return {
+                    ...b,
+                    creditsUsed: b.creditsUsed + 1,
+                    creditsRemaining: Math.max(0, b.creditsTotal - (b.creditsUsed + 1)),
+                  };
+                }
+                return b;
+              });
+          return {
+            ...prev,
+            creditsUsed: newTotalUsed,
+            creditsRemaining: Math.max(0, prev.creditsTotal - newTotalUsed),
+            batches: updatedBatches,
+          };
+        }
+      );
 
       return true;
     } catch (error) {
@@ -224,11 +261,11 @@ export function useCredits(userId: string | null) {
 
       if (error) throw error;
 
-      // Optimistically update cache
-      queryClient.setQueryData(["credits", userId], (prev: CreditsState | undefined) => {
-        if (!prev) return prev;
-        return { ...prev, saveScanHistory: value };
-      });
+      queryClient.setQueryData(
+        ["credits", userId, isGuest ? "guest" : "user"],
+        (prev: CreditsState | undefined) =>
+          prev ? { ...prev, saveScanHistory: value } : prev
+      );
       return true;
     } catch (error) {
       console.error("Error updating save scan history preference:", error);
@@ -236,13 +273,13 @@ export function useCredits(userId: string | null) {
     }
   };
 
-  // Add credits as a NEW batch (stacking)
+  // Purchases — only normal users buy credits. Guests are not expected to
+  // hit this path (the purchase UI is hidden), but if they do we no-op.
   const addCredits = async (plan: CreditPlan): Promise<boolean> => {
-    if (!userId) return false;
+    if (!userId || isGuest) return false;
 
     try {
       const now = new Date();
-      // Set to a far future date (year 2100) to effectively remove expiration
       const expiresAt = new Date("2100-01-01T00:00:00Z");
 
       const { error } = await supabase.from("credit_purchases").insert({
@@ -256,7 +293,6 @@ export function useCredits(userId: string | null) {
 
       if (error) throw error;
 
-      // Also update the legacy user_subscriptions table for backward compat
       await supabase
         .from("user_subscriptions")
         .update({
@@ -274,11 +310,8 @@ export function useCredits(userId: string | null) {
     }
   };
 
-  // Get batches with remaining credits
-  const getActiveBatches = (): CreditBatch[] => {
-    return state.batches.filter((b) => b.creditsRemaining > 0);
-  };
-
+  const getActiveBatches = (): CreditBatch[] =>
+    state.batches.filter((b) => b.creditsRemaining > 0);
 
   return {
     ...state,

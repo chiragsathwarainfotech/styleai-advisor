@@ -65,7 +65,7 @@ export function CreditsDisplay({
 
       {/* Dropdown popover */}
       {open && activeBatches.length > 0 && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border rounded-xl shadow-elevated z-50 overflow-hidden animate-fade-in">
+        <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-card border border-border rounded-xl shadow-elevated z-50 overflow-hidden animate-fade-in">
           <div className="px-4 py-3 border-b border-border/50">
             <p className="text-sm font-semibold text-foreground">Credit Details</p>
           </div>

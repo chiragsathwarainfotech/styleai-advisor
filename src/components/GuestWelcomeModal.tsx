@@ -16,7 +16,7 @@ interface GuestWelcomeModalProps {
 export const GuestWelcomeModal = ({ open, onOpenChange }: GuestWelcomeModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border-primary/20 bg-card/95 backdrop-blur-xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md border-primary/20 bg-card/95 backdrop-blur-xl">
         <DialogHeader className="flex flex-col items-center gap-4 text-center">
           <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center animate-bounce-slow">
             <Sparkles className="w-8 h-8 text-primary-foreground" />

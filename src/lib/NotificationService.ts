@@ -1,5 +1,4 @@
 import { PushNotifications } from '@capacitor/push-notifications';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -11,9 +10,6 @@ export const NotificationService = {
     console.log('[Push Diagnostics] init started, isNative:', Capacitor.isNativePlatform());
     if (Capacitor.isNativePlatform()) {
       try {
-        // Request Local Notification permissions too for foreground display
-        await LocalNotifications.requestPermissions();
-        
         console.log('[Push Diagnostics] adding listeners...');
         await this.addListeners();
         console.log('[Push Diagnostics] registering notifications...');
@@ -45,26 +41,11 @@ export const NotificationService = {
       console.error('Push registration error: ', err.error);
     });
 
-    await PushNotifications.addListener('pushNotificationReceived', async notification => {
-      console.info('Push notification received in foreground: ', notification);
-      
-      // Manually show local notification so it appears in the tray while app is open
-      try {
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title: notification.title || 'Notification',
-              body: notification.body || '',
-              id: Math.floor(Math.random() * 10000),
-              extra: notification.data,
-              smallIcon: 'res://ic_stat_name', // Ensure this exists or use default
-              schedule: { at: new Date(Date.now() + 100) }
-            }
-          ]
-        });
-      } catch (e) {
-        console.error('[Push] Error scheduling local notification:', e);
-      }
+    await PushNotifications.addListener('pushNotificationReceived', notification => {
+      // Foreground delivery: just log. The OS handles tray display from
+      // the FCM payload itself; the app no longer schedules a duplicate
+      // local notification.
+      console.info('Push notification received in foreground:', notification);
     });
 
     await PushNotifications.addListener('pushNotificationActionPerformed', notification => {

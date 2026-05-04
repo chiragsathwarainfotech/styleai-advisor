@@ -3,7 +3,6 @@ import { Device } from "@capacitor/device";
 import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
 
-// Simple UUID generator for web fallback
 const generateUUID = () => {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -13,7 +12,6 @@ const generateUUID = () => {
 };
 
 const DEVICE_ID_KEY = "styloren_device_id";
-const GUEST_USED_KEY = "styloren_guest_used";
 
 /**
  * Robust persistent Device ID for Guest tracking.
@@ -30,117 +28,75 @@ export const getPersistentDeviceId = async (): Promise<string> => {
     }
   }
 
-  // Web fallback or failure fallback
   const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
   let deviceId = value || localStorage.getItem(DEVICE_ID_KEY);
-  
+
   if (!deviceId) {
     deviceId = generateUUID();
     await Preferences.set({ key: DEVICE_ID_KEY, value: deviceId });
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
-  
+
   return deviceId;
 };
 
-/**
- * Checks if the current device has already used its guest quota.
- * Uses Preferences as PRIMARY check (stable on iOS/Android).
- * Falls back to DB check when possible.
- */
-export const hasUsedGuestQuota = async (deviceId: string): Promise<boolean> => {
-  // PRIMARY: Check persistent preferences
-  const { value } = await Preferences.get({ key: GUEST_USED_KEY });
-  const localFlag = value || localStorage.getItem(GUEST_USED_KEY);
-  
-  if (localFlag === "true") {
-    return true;
-  }
+export interface GuestSignInResult {
+  data: { user: any; session: any } | null;
+  error: any;
+  isNewGuest: boolean;
+}
 
-  // SECONDARY: Check new dedicated guest_users table
+/**
+ * Deterministic guest sign-in. The same device always resolves to the same
+ * guest account, so logging out and back in restores prior credits.
+ *
+ * Calls the `guest-auth` edge function which:
+ *   - returns existing credentials if a guest already exists for this device
+ *   - otherwise creates a new auth user (admin), seeds subscription + 3 credits
+ */
+export const signInAsGuest = async (deviceId: string): Promise<GuestSignInResult> => {
   try {
-    const { data, error } = await supabase
-      .from("guest_users")
-      .select("id")
-      .eq("device_id", deviceId)
-      .limit(1);
+    const { data: tokenResponse, error: fnError } = await supabase.functions.invoke(
+      "guest-auth",
+      { body: { device_id: deviceId } }
+    );
 
-    if (error) {
-      console.error("[Guest] Error checking quota in guest_users:", error);
-      return false;
+    if (fnError) throw fnError;
+    if (!tokenResponse?.email || !tokenResponse?.password) {
+      throw new Error("Guest auth did not return credentials");
     }
 
-    if (data && data.length > 0) {
-      // Sync: mark local too
-      await markGuestUsed();
-      return true;
-    }
-  } catch (err) {
-    console.error("[Guest] catch error checking guest_users quota:", err);
-  }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: tokenResponse.email,
+      password: tokenResponse.password,
+    });
 
-  return false;
-};
+    if (error) throw error;
 
-/**
- * Mark the current device as having used its guest quota.
- * Called after successful guest sign-in.
- */
-export const markGuestUsed = async () => {
-  await Preferences.set({ key: GUEST_USED_KEY, value: "true" });
-  localStorage.setItem(GUEST_USED_KEY, "true");
-};
-
-/**
- * Performs a Guest Sign-in.
- * Uses Anonymous auth if possible, otherwise creates a silent account.
- */
-export const signInAsGuest = async (deviceId: string) => {
-  try {
-    // Attempt standard anonymous sign-in first
-    const { data, error } = await supabase.auth.signInAnonymously();
-    let authData = data;
-    let authError = error;
-    
-    if (authError) {
-      console.error("[Guest] signInAnonymously failed, attempting fallback:", authError);
-      
-      // Fallback: Create a silent account with a random password
-      const guestEmail = `guest_${deviceId.substring(0, 8)}_${Math.floor(Math.random() * 10000)}@guest.styloren.com`;
-      const guestPassword = generateUUID();
-      
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: guestEmail,
-        password: guestPassword,
-      });
-      
-      if (signUpError) throw signUpError;
-      authData = signUpData;
-      authError = null;
-    }
-    
-    if (authData?.user) {
-      console.log("[Guest] Recording guest entry in guest_users table");
-      // Record in dedicated guest_users table
-      await supabase.from("guest_users").upsert({
-        device_id: deviceId,
-        user_id: authData.user.id
-      }, { onConflict: 'device_id' });
-      
-      await markGuestUsed();
-    }
-    
-    return { data: authData, error: authError };
+    return {
+      data,
+      error: null,
+      isNewGuest: tokenResponse.is_new === true,
+    };
   } catch (err: any) {
     console.error("[Guest] Guest Sign-in error:", err);
-    return { data: null, error: err };
+    return { data: null, error: err, isNewGuest: false };
   }
 };
 
 /**
  * Checks if the current user is a guest.
+ *
+ * Guest auth users are flagged via `user_metadata.is_guest` when the
+ * `guest-auth` edge function provisions them. The legacy patterns
+ * (anonymous auth and the old `@styloren.com` domain) remain
+ * recognized so accounts created by earlier app versions still resolve
+ * as guests after they sign in.
  */
 export const isGuestUser = (user: any): boolean => {
   if (!user) return false;
-  return user.is_anonymous === true || user.email?.endsWith("@guest.styloren.com");
+  if (user.is_anonymous === true) return true;
+  if (user.user_metadata?.is_guest === true) return true;
+  if (user.email?.endsWith("@styloren.com")) return true;
+  return false;
 };

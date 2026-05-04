@@ -15,6 +15,12 @@ verify_jwt = false
 [functions.delete-user]
 verify_jwt = false
 
+[functions.guest-auth]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
 [functions.fix-stuck]
 enabled = true
 verify_jwt = true

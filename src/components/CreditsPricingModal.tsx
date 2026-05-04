@@ -27,6 +27,10 @@ export function CreditsPricingModal({
   const [loading, setLoading] = useState<string | null>(null);
   const [pendingTransactionId, setPendingTransactionId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  // True after the 5-min countdown elapses without webhook completion.
+  // We keep polling silently and show a "we're working on it" message;
+  // the user can close the modal — webhook + push will handle the rest.
+  const [paymentDelayed, setPaymentDelayed] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { isGuest } = useAuth();
@@ -147,6 +151,7 @@ export function CreditsPricingModal({
           console.log("[IAP Debug] Record created successfully:", data.id);
           setPendingTransactionId(data.id);
           setCountdown(300); // 5 minutes
+          setPaymentDelayed(false);
 
           toast({
             title: "Payment Success! 💳",
@@ -194,6 +199,13 @@ export function CreditsPricingModal({
           if (remaining > 0) {
             setPendingTransactionId(data.id);
             setCountdown(remaining);
+            setPaymentDelayed(false);
+          } else {
+            // Timer already expired — surface the "still working" UI so the
+            // user knows the payment is on hold but credits will arrive.
+            setPendingTransactionId(data.id);
+            setCountdown(0);
+            setPaymentDelayed(true);
           }
         }
       }
@@ -209,8 +221,11 @@ export function CreditsPricingModal({
       }, 1000);
       return () => clearInterval(timer);
     } else if (countdown === 0) {
-      setPendingTransactionId(null);
-      setCountdown(null);
+      // Timer expired without webhook confirmation. Don't tear down the
+      // pending transaction — switch to the "we're working on it" state
+      // so the user gets clear messaging, polling continues silently, and
+      // the eventual webhook will close the modal or push a notification.
+      setPaymentDelayed(true);
     }
   }, [countdown]);
 
@@ -223,6 +238,7 @@ export function CreditsPricingModal({
       if (pollInterval) clearInterval(pollInterval);
       setPendingTransactionId(null);
       setCountdown(null);
+      setPaymentDelayed(false);
       credits.refetch();
       toast({
         title: "Purchase Success! 🎉",
@@ -284,15 +300,23 @@ export function CreditsPricingModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-primary" />
-            {pendingTransactionId ? "Processing Transaction" : "Get Credits"}
+            {pendingTransactionId
+              ? paymentDelayed
+                ? "Payment Pending"
+                : "Processing Transaction"
+              : "Get Credits"}
           </DialogTitle>
           <DialogDescription className="font-body space-y-1">
             {pendingTransactionId ? (
-              <span className="block">Please wait while we verify your purchase.</span>
+              <span className="block">
+                {paymentDelayed
+                  ? "Hang tight — your credits will arrive once payment clears."
+                  : "Please wait while we verify your purchase."}
+              </span>
             ) : isGuest ? (
               <span className="block text-destructive font-semibold">
                 Please sign in to purchase credits
@@ -307,7 +331,7 @@ export function CreditsPricingModal({
         </DialogHeader>
 
         {/* Verification State Overlay */}
-        {pendingTransactionId ? (
+        {pendingTransactionId && !paymentDelayed ? (
           <div className="py-8 space-y-8 animate-in fade-in zoom-in duration-300">
             <div className="relative w-28 h-28 mx-auto">
               <div className="absolute inset-0 border-4 border-primary/10 rounded-full" />
@@ -347,6 +371,40 @@ export function CreditsPricingModal({
               )}
             </div>
           </div>
+        ) : pendingTransactionId && paymentDelayed ? (
+          <div className="py-8 space-y-6 animate-in fade-in zoom-in duration-300">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Loader2 className="w-10 h-10 text-primary animate-spin" style={{ animationDuration: '2.5s' }} />
+            </div>
+
+            <div className="text-center space-y-3 px-4">
+              <h3 className="font-display text-xl font-bold text-foreground">
+                We're working on your payment
+              </h3>
+              <p className="text-sm text-muted-foreground font-body leading-relaxed">
+                Your payment is on hold or still being processed. You'll get
+                your credits as soon as your payment clears — and we'll send
+                you a notification the moment it's done.
+              </p>
+
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mt-4 text-left">
+                <p className="text-xs text-foreground/80 font-medium mb-1">What happens next?</p>
+                <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4">
+                  <li>You can safely close this screen.</li>
+                  <li>Your store account is the source of truth — you won't be double-charged.</li>
+                  <li>Credits arrive automatically once payment is approved.</li>
+                  <li>You'll receive a push notification when they're added.</li>
+                </ul>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => onOpenChange(false)}
+              className="w-full gradient-primary border-0"
+            >
+              OK, got it
+            </Button>
+          </div>
         ) : (
           <>
             {/* Guest Purchase Restriction Notice */}
@@ -362,8 +420,15 @@ export function CreditsPricingModal({
                   </p>
                 </div>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     onOpenChange(false);
+                    // Guest must be signed out before navigating, otherwise
+                    // Auth.tsx redirects them straight back to /analyze.
+                    try {
+                      await supabase.auth.signOut();
+                    } catch (e) {
+                      console.error("[CreditsPricingModal] sign-out failed:", e);
+                    }
                     navigate("/auth");
                   }}
                   className="w-full gradient-primary"

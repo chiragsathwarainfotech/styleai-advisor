@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, CircleUser } from "lucide-react";
-import { getPersistentDeviceId, hasUsedGuestQuota, signInAsGuest, markGuestUsed } from "@/lib/guest";
+import { getPersistentDeviceId, signInAsGuest } from "@/lib/guest";
 import { isOnline } from "@/lib/connectivity";
 import {
   Dialog,
@@ -210,7 +210,7 @@ const PrivacyContent = () => (
 );
 
 const Auth = () => {
-  const { user, isLoading, termsAccepted, refetchTerms, isGuest } = useAuth();
+  const { user, isLoading, termsAccepted, refetchTerms } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -218,9 +218,7 @@ const Auth = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
-  const [guestQuotaUsed, setGuestQuotaUsed] = useState(false);
-  const [guestQuotaChecking, setGuestQuotaChecking] = useState(true);
-  
+
   // Forgot password states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState<"email" | "otp" | "newPassword">("email");
@@ -242,12 +240,20 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Redirect logged-in users (terms are accepted during signup, so skip the gate)
+  // Redirect logged-in users (terms are accepted during signup, so skip the gate).
+  // Guests are included — the edge function already accepts terms for them, so
+  // they fall straight through to /analyze where the welcome modal opens.
   useEffect(() => {
     const autoAcceptAndRedirect = async () => {
-      // Only redirect if NOT a guest and NOT showing the bonus dialog
-      if (!isLoading && user && !isGuest && !showBonusDialog && !showSignUpOtp) {
-        // If terms not yet accepted, auto-accept them (since signup already requires acceptance)
+      if (!isLoading && user && !showBonusDialog && !showSignUpOtp) {
+        // Double-check the live session before redirecting. After a
+        // signOut() the React `user` state can lag the cleared storage by
+        // a tick — without this guard we'd bounce a user who just signed
+        // out (e.g. guest tapping "Sign In / Create Account") right back
+        // to /analyze.
+        const { data: { session: liveSession } } = await supabase.auth.getSession();
+        if (!liveSession) return;
+
         if (termsAccepted === false) {
           await supabase
             .from("user_subscriptions")
@@ -258,32 +264,15 @@ const Auth = () => {
             }, { onConflict: 'user_id' });
           await refetchTerms();
         }
-        // Redirect to analyze once terms are handled
         if (termsAccepted === true) {
           navigate("/analyze", { replace: true });
         }
       }
     };
     autoAcceptAndRedirect();
-  }, [isLoading, user, isGuest, termsAccepted, navigate, refetchTerms, showBonusDialog, showSignUpOtp]);
+  }, [isLoading, user, termsAccepted, navigate, refetchTerms, showBonusDialog, showSignUpOtp]);
 
-  // Pre-check guest device quota on mount
-  useEffect(() => {
-    const checkQuota = async () => {
-      try {
-        const deviceId = await getPersistentDeviceId();
-        const used = await hasUsedGuestQuota(deviceId);
-        setGuestQuotaUsed(used);
-      } catch {
-        setGuestQuotaUsed(false);
-      } finally {
-        setGuestQuotaChecking(false);
-      }
-    };
-    checkQuota();
-  }, []);
-
-  // Show loading spinner while checking auth
+// Show loading spinner while checking auth
   if (isLoading) {
     return (
       <div className="min-h-screen gradient-hero flex items-center justify-center">
@@ -388,7 +377,9 @@ const Auth = () => {
   };
 
   const handleAfterVerification = async (newUser: any) => {
-    // Update the user_subscriptions table to mark terms as accepted
+    // Welcome credits for normal users live on user_subscriptions (the
+    // authoritative balance source). credit_purchases is reserved for
+    // tracking actual paid batches.
     await supabase
       .from("user_subscriptions")
       .upsert({
@@ -396,22 +387,10 @@ const Auth = () => {
         display_name: displayName || newUser.email?.split('@')[0],
         terms_accepted: true,
         terms_accepted_timestamp: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
-
-    // Give free credits to new users
-    const expiresAt = new Date("2100-01-01T00:00:00Z");
-
-    await supabase
-      .from("credit_purchases")
-      .insert({
-        user_id: newUser.id,
         credits_total: 5,
         credits_used: 0,
-        purchased_at: new Date().toISOString(),
-        expires_at: expiresAt.toISOString(),
-        plan_name: "Welcome Bonus",
-      });
-    
+      }, { onConflict: 'user_id' });
+
     setShowBonusDialog(true);
   };
 
@@ -648,74 +627,31 @@ const Auth = () => {
     setLoading(true);
     try {
       const deviceId = await getPersistentDeviceId();
-      
-      // 1. Check if device has already used guest quota
-      const alreadyUsed = await hasUsedGuestQuota(deviceId);
-      if (alreadyUsed) {
-        toast({
-          title: "Guest Limit Reached",
-          description: "This device has already used the Guest Sign-in. Please sign in or create an account to continue.",
-          variant: "destructive",
-        });
-        return;
-      }
 
-      // 2. Perform Guest Sign-in
       const response = await signInAsGuest(deviceId);
       if (response.error) throw response.error;
 
-      // 3. Get the user — try response first, fallback to current session
-      let newUser = response.data?.user;
-      if (!newUser) {
-        console.warn("[Guest] User not in response, fetching from session...");
-        const { data: sessionData } = await supabase.auth.getUser();
-        newUser = sessionData?.user;
-      }
-
-      if (!newUser) {
+      const guestUser = response.data?.user;
+      if (!guestUser) {
         throw new Error("Guest sign-in succeeded but no user was returned.");
       }
 
-      // 4. Mark device as used in user_subscriptions
-      const { error: subError } = await supabase
-        .from("user_subscriptions")
-        .upsert({
-          user_id: newUser.id,
-          display_name: `guest_${deviceId}`,
-          terms_accepted: true,
-          terms_accepted_timestamp: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+      // Persist preference so the guest stays signed in across launches
+      // until they explicitly log out.
+      localStorage.setItem("keepSignedIn", "true");
 
-      if (subError) {
-        console.error("[Guest] Error saving subscription:", subError);
-      }
-
-      // 5. Give 3 free credits
-      const expiresAt = new Date("2100-01-01T00:00:00Z");
-
-      const { error: creditError } = await supabase
-        .from("credit_purchases")
-        .insert({
-          user_id: newUser.id,
-          credits_total: 3,
-          credits_used: 0,
-          purchased_at: new Date().toISOString(),
-          expires_at: expiresAt.toISOString(),
-          plan_name: "Guest Bonus",
+      if (response.isNewGuest) {
+        // Clear any prior welcome flag so the modal shows on Analyze.
+        localStorage.removeItem("guestWelcomeShown");
+        localStorage.setItem("pendingGuestWelcome", "true");
+      } else {
+        localStorage.setItem("guestWelcomeShown", "true");
+        localStorage.removeItem("pendingGuestWelcome");
+        toast({
+          title: "Welcome back!",
+          description: "Your guest account and credits have been restored.",
         });
-
-      if (creditError) {
-        console.error("[Guest] Error inserting credits:", creditError);
       }
-
-      // 6. Mark as used locally
-      await markGuestUsed();
-      setGuestQuotaUsed(true);
-
-      toast({
-        title: "Welcome, Guest!",
-        description: "You've received 3 FREE credits to try Styloren!",
-      });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
       toast({
@@ -730,7 +666,7 @@ const Auth = () => {
 
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4 sm:px-6 py-safe">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-primary/10 blur-3xl" />
@@ -739,7 +675,7 @@ const Auth = () => {
 
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated animate-scale-in">
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 shadow-elevated animate-scale-in">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
@@ -1143,45 +1079,30 @@ const Auth = () => {
                 </span>
               </div>
 
-              {guestQuotaUsed ? (
-                <p className="text-xs text-muted-foreground font-body">
-                  You had already used it one time. Please{" "}
-                  <button
-                    onClick={() => setIsLogin(false)}
-                    className="text-primary underline hover:text-primary/80"
-                  >
-                    create an account
-                  </button>{" "}
-                  to continue.
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground font-body">
-                    Instantly, no sign-up needed
-                  </p>
-                  <Button
-                    id="guest-signin-btn"
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGuestSignIn}
-                    disabled={loading || guestQuotaChecking}
-                    className="mt-1 px-6 font-body font-medium border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-all"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      <>
-                        <CircleUser className="w-3.5 h-3.5 mr-2" />
-                        Sign in as Guest
-                      </>
-                    )}
-                  </Button>
-                </>
-              )}
+              <p className="text-xs text-muted-foreground font-body">
+                Instantly, no sign-up needed
+              </p>
+              <Button
+                id="guest-signin-btn"
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleGuestSignIn}
+                disabled={loading}
+                className="mt-1 px-6 font-body font-medium border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-all"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <CircleUser className="w-3.5 h-3.5 mr-2" />
+                    Sign in as Guest
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         )}

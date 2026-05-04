@@ -56,7 +56,7 @@ const Consent = ({ userId, onConsentAccepted }: ConsentProps) => {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4 sm:px-6 py-safe">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-primary/10 blur-3xl" />
@@ -65,7 +65,7 @@ const Consent = ({ userId, onConsentAccepted }: ConsentProps) => {
 
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated animate-scale-in relative">
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 shadow-elevated animate-scale-in relative">
           {/* Close Button */}
           <Button
             variant="ghost"
@@ -166,7 +166,7 @@ const Consent = ({ userId, onConsentAccepted }: ConsentProps) => {
 
       {/* Terms & Conditions Modal */}
       <Dialog open={showTerms} onOpenChange={setShowTerms}>
-        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg max-h-[85vh] flex flex-col p-0">
           <DialogHeader className="p-4 pb-2 border-b border-border/50 flex-shrink-0">
             <DialogTitle className="font-display text-lg font-semibold text-foreground">
               Terms & Conditions
@@ -253,7 +253,7 @@ const Consent = ({ userId, onConsentAccepted }: ConsentProps) => {
 
       {/* Privacy Policy Modal */}
       <Dialog open={showPrivacy} onOpenChange={setShowPrivacy}>
-        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg max-h-[85vh] flex flex-col p-0">
           <DialogHeader className="p-4 pb-2 border-b border-border/50 flex-shrink-0">
             <DialogTitle className="font-display text-lg font-semibold text-foreground">
               Privacy Policy
