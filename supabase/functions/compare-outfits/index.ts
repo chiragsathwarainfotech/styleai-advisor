@@ -179,7 +179,11 @@ serve(async (req) => {
           ],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 2048,
+            // Match analyze-outfit: 2048 was getting truncated on
+            // multi-image comparisons (4 outfits × 7 sections each is
+            // 5–7k tokens easily). 8192 is the native ceiling for
+            // Gemini 2.5 Flash.
+            maxOutputTokens: 8192,
           }
         }),
       });
@@ -203,6 +207,10 @@ serve(async (req) => {
 
     const data = await response.json();
     const comparison = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const finishReason = data.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      console.warn(`[compare-outfits] non-STOP finishReason: ${finishReason}`);
+    }
 
     if (!comparison) {
       console.error("No comparison content received");

@@ -29,37 +29,78 @@ export const NotificationService = {
   },
 
   async addListeners() {
-    await PushNotifications.addListener('registration', async token => {
-      console.info('Push registration success, token: ' + token.value);
-      this._currentToken = token.value;
-      if (this._userId) {
-        await this.saveToken(token.value);
+    // On iOS, the token from @capacitor/push-notifications is a raw APNs
+    // device token, which our webhook (FCM v1) cannot deliver to. Instead
+    // we ask Firebase Messaging for the FCM registration token — Firebase
+    // exchanges the APNs token internally and returns an FCM token that
+    // our webhook already knows how to send to.
+    //
+    // On Android, @capacitor/push-notifications already returns an FCM
+    // token via Google Play Services, so we use it as-is.
+    await PushNotifications.addListener('registration', async (token) => {
+      const platform = Capacitor.getPlatform();
+      console.info(`[Push] registration event on ${platform}`);
+
+      if (platform === 'ios') {
+        try {
+          const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
+          const result = await FirebaseMessaging.getToken();
+          if (!result?.token) throw new Error('Firebase Messaging returned no token');
+          console.info('[Push] iOS FCM token acquired');
+          this._currentToken = result.token;
+          if (this._userId) await this.saveToken(result.token);
+        } catch (e) {
+          console.error('[Push] Failed to acquire iOS FCM token:', e);
+          // Fall back to APNs-shaped token so something is saved — webhook
+          // will fail to deliver but at least we have visibility.
+          this._currentToken = token.value;
+          if (this._userId) await this.saveToken(token.value);
+        }
+      } else {
+        console.info('[Push] Android FCM token acquired');
+        this._currentToken = token.value;
+        if (this._userId) await this.saveToken(token.value);
       }
     });
 
-    await PushNotifications.addListener('registrationError', err => {
+    await PushNotifications.addListener('registrationError', (err) => {
       console.error('Push registration error: ', err.error);
     });
 
-    await PushNotifications.addListener('pushNotificationReceived', notification => {
+    await PushNotifications.addListener('pushNotificationReceived', (notification) => {
       // Foreground delivery: just log. The OS handles tray display from
-      // the FCM payload itself; the app no longer schedules a duplicate
-      // local notification.
+      // the FCM payload itself.
       console.info('Push notification received in foreground:', notification);
     });
 
-    await PushNotifications.addListener('pushNotificationActionPerformed', notification => {
+    await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
       console.info('Push notification action performed', notification.actionId, notification.inputValue);
     });
+
+    // Listen for FCM token refreshes on iOS (Firebase issues a new token
+    // periodically or when APNs token rotates).
+    if (Capacitor.getPlatform() === 'ios') {
+      try {
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
+        await FirebaseMessaging.addListener('tokenReceived', async (event) => {
+          if (!event?.token || event.token === this._currentToken) return;
+          console.info('[Push] iOS FCM token refreshed');
+          this._currentToken = event.token;
+          if (this._userId) await this.saveToken(event.token);
+        });
+      } catch (e) {
+        console.warn('[Push] Could not attach Firebase tokenReceived listener:', e);
+      }
+    }
   },
 
   async saveToken(token: string) {
     if (!this._userId) return;
-    
+
     try {
       const platform = Capacitor.getPlatform();
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) return;
 
       const response = await supabase.functions.invoke('register-push-token', {
@@ -89,7 +130,6 @@ export const NotificationService = {
 
     if (permStatus.receive !== 'granted') {
       console.log('[Push Diagnostics] User denied permissions!');
-      // We don't throw here to avoid breaking the app boot
       return;
     }
 

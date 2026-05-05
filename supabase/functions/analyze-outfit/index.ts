@@ -189,7 +189,12 @@ serve(async (req) => {
           }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 2048,
+            // 2048 was clipping ~half of analyses mid-"Colour & Style
+            // Rules" — the prompt asks for 7 detailed sections and bursts
+            // past 2k tokens whenever the model is verbose. 8192 is the
+            // native ceiling for Gemini 2.5 Flash output and leaves
+            // ample headroom even on long, accessory-heavy outfits.
+            maxOutputTokens: 8192,
           }
         }),
       });
@@ -213,6 +218,10 @@ serve(async (req) => {
 
     const data = await response.json();
     const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const finishReason = data.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      console.warn(`[analyze-outfit] non-STOP finishReason: ${finishReason}`);
+    }
 
     return new Response(JSON.stringify({ analysis }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
