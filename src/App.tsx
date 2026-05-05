@@ -12,6 +12,7 @@ import Account from "./pages/Account";
 import ScanHistory from "./pages/ScanHistory";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
+import PurchaseHistory from "./pages/PurchaseHistory";
 import NotFound from "./pages/NotFound";
 import { Capacitor } from "@capacitor/core";
 import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
@@ -102,6 +103,7 @@ const App = () => {
                 <Route path="/scan-history" element={<ScanHistory />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/terms-conditions" element={<TermsConditions />} />
+                <Route path="/purchase-history" element={<PurchaseHistory />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>

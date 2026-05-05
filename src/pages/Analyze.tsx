@@ -13,6 +13,8 @@ import { CreditsDisplay } from "@/components/CreditsDisplay";
 import { CompareOutfits } from "@/components/CompareOutfits";
 import { NameInputModal } from "@/components/NameInputModal";
 import { NoCreditsScreen } from "@/components/NoCreditsScreen";
+import { GuestCreditsExpiredModal } from "@/components/GuestCreditsExpiredModal";
+import { GuestWelcomeModal } from "@/components/GuestWelcomeModal";
 import { useCredits, CreditPlan } from "@/hooks/useCredits";
 import { useScanHistory } from "@/hooks/useScanHistory";
 import { AnalysisCard } from "@/components/AnalysisCard";
@@ -21,7 +23,7 @@ import { compressImage } from "@/lib/imageCompression";
 import { isOnline } from "@/lib/connectivity";
 
 const Analyze = () => {
-  const { user, isLoading, termsAccepted } = useAuth();
+  const { user, isLoading, termsAccepted, isGuest } = useAuth();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -30,6 +32,7 @@ const Analyze = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [showNoCredits, setShowNoCredits] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Name state
   const [showNameModal, setShowNameModal] = useState(false);
@@ -53,12 +56,23 @@ const Analyze = () => {
     }
   }, [isLoading, user, termsAccepted, navigate]);
 
-  // Check if user needs to set display name
+  // Check if user needs to set display name (skip for guests — they are
+  // never prompted for a name).
   useEffect(() => {
-    if (!credits.isLoading && user && credits.displayName === null) {
+    if (!credits.isLoading && user && !isGuest && credits.displayName === null) {
       setShowNameModal(true);
     }
-  }, [credits.isLoading, credits.displayName, user]);
+  }, [credits.isLoading, credits.displayName, user, isGuest]);
+
+  // Show guest welcome modal only for newly-created guests. Returning guests
+  // (who restored an existing account) skip the popup.
+  useEffect(() => {
+    if (!isLoading && isGuest && localStorage.getItem("pendingGuestWelcome") === "true") {
+      setShowWelcomeModal(true);
+      localStorage.removeItem("pendingGuestWelcome");
+      localStorage.setItem("guestWelcomeShown", "true");
+    }
+  }, [isLoading, isGuest]);
 
   const handleNameComplete = async (name: string) => {
     setShowNameModal(false);
@@ -101,7 +115,7 @@ const Analyze = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -155,7 +169,7 @@ const Analyze = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -176,7 +190,7 @@ const Analyze = () => {
       if (error) throw error;
 
       // Handle rate limit response
-      if (data.error === 'rate_limit_exceeded') {
+      if (data?.error === 'rate_limit_exceeded') {
         setRateLimited(true);
         toast({
           title: "You're uploading too fast 🚀",
@@ -187,11 +201,11 @@ const Analyze = () => {
         return;
       }
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
-      setAnalysis(data.analysis);
+      setAnalysis(data?.analysis || "");
 
       // Deduct 1 credit for the analysis
       await credits.useCredit();
@@ -271,6 +285,16 @@ const Analyze = () => {
 
   // Show no credits screen overlay if needed
   if (showNoCredits) {
+    // For guest users: show the non-dismissable GuestCreditsExpiredModal
+    if (isGuest) {
+      return (
+        <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
+          <GuestCreditsExpiredModal open={true} />
+        </div>
+      );
+    }
+
+    // For regular users: standard NoCreditsScreen + pricing modal
     return (
       <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
         <div className="max-w-md w-full">
@@ -312,14 +336,14 @@ const Analyze = () => {
         className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
+        <div className="container mx-auto px-4 sm:px-6 pt-1 pb-3 sm:pb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-semibold text-foreground">Styloren</span>
+            <span className="font-display text-lg sm:text-xl font-semibold text-foreground truncate">Styloren</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <CreditsDisplay
               creditsRemaining={credits.creditsRemaining}
               isExpired={credits.isExpired}
@@ -340,19 +364,19 @@ const Analyze = () => {
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-6 py-12 max-w-4xl">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-12 max-w-4xl">
         {/* Welcome message */}
-        <div className="text-center mb-12 animate-slide-up">
-          <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground mb-4">
-            Hey{credits.displayName ? ` ${credits.displayName}` : " there"}! 👋
+        <div className="text-center mb-8 sm:mb-12 animate-slide-up">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground mb-3 sm:mb-4">
+            Hey{isGuest ? " Guest User" : credits.displayName ? ` ${credits.displayName}` : " there"}! 👋
           </h1>
-          <p className="font-body text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          <p className="font-body text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             Welcome to Styloren, your personal AI fashion advisor! Just upload your pic with your current outfit and watch the magic happen!
           </p>
         </div>
 
         {/* Upload section */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated animate-scale-in" style={{ animationDelay: "0.1s" }}>
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 shadow-elevated animate-scale-in" style={{ animationDelay: "0.1s" }}>
           {!imagePreview ? (
             <div className="space-y-4">
               {!credits.canUseCredit() && (
@@ -553,6 +577,11 @@ const Analyze = () => {
         onOpenChange={setShowPricing}
         userId={user?.id}
         onPlanPurchased={handlePlanPurchased}
+      />
+
+      <GuestWelcomeModal
+        open={showWelcomeModal}
+        onOpenChange={setShowWelcomeModal}
       />
     </div>
   );

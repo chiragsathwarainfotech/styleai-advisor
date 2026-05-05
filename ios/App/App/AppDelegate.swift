@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import FirebaseCore
 
 
 @UIApplicationMain
@@ -8,7 +9,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Initialize Firebase before any of the Capacitor-Firebase plugins
+        // ask for tokens. Reads GoogleService-Info.plist from the bundle.
+        FirebaseApp.configure()
         return true
     }
 

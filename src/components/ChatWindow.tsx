@@ -151,7 +151,7 @@ export function ChatWindow({
       </div>
 
       {/* Messages */}
-      <div className="h-80 overflow-y-auto p-4 space-y-4">
+      <div className="h-[55vh] sm:h-80 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         {messages.map((message, index) => (
           <div
             key={index}

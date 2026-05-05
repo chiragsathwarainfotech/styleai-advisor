@@ -28,7 +28,7 @@ export function NameInputModal({ open, onComplete }: NameInputModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader className="text-center">
           <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center mx-auto mb-4">
             <Sparkles className="w-8 h-8 text-primary-foreground" />

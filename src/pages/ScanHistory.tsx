@@ -99,27 +99,27 @@ const ScanHistory = () => {
         className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border/50"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="container mx-auto px-6 pt-1 pb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto px-4 sm:px-6 pt-1 pb-3 sm:pb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/analyze")}
-              className="mr-2"
+              className="mr-1 flex-shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
               <History className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-semibold text-foreground">Scan History</span>
+            <span className="font-display text-lg sm:text-xl font-semibold text-foreground truncate">Scan History</span>
           </div>
           <ThemeToggle />
         </div>
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-6 py-8 max-w-2xl">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-2xl">
         {/* Info banner */}
         {!hasCredits && (
           <div className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/20">

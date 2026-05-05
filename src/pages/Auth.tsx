@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, UserCircle } from "lucide-react";
-import { getPersistentDeviceId, hasUsedGuestQuota, signInAsGuest } from "@/lib/guest";
+import { Sparkles, ArrowLeft, X, Loader2, Eye, EyeOff, CircleUser } from "lucide-react";
+import { getPersistentDeviceId, signInAsGuest } from "@/lib/guest";
 import { isOnline } from "@/lib/connectivity";
 import {
   Dialog,
@@ -218,8 +218,7 @@ const Auth = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
-  
-  
+
   // Forgot password states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState<"email" | "otp" | "newPassword">("email");
@@ -232,14 +231,29 @@ const Auth = () => {
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   
+  // Sign up OTP states
+  const [showSignUpOtp, setShowSignUpOtp] = useState(false);
+  const [signUpOtp, setSignUpOtp] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [showBonusDialog, setShowBonusDialog] = useState(false);
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Redirect logged-in users (terms are accepted during signup, so skip the gate)
+  // Redirect logged-in users (terms are accepted during signup, so skip the gate).
+  // Guests are included — the edge function already accepts terms for them, so
+  // they fall straight through to /analyze where the welcome modal opens.
   useEffect(() => {
     const autoAcceptAndRedirect = async () => {
-      if (!isLoading && user) {
-        // If terms not yet accepted, auto-accept them (since signup already requires acceptance)
+      if (!isLoading && user && !showBonusDialog && !showSignUpOtp) {
+        // Double-check the live session before redirecting. After a
+        // signOut() the React `user` state can lag the cleared storage by
+        // a tick — without this guard we'd bounce a user who just signed
+        // out (e.g. guest tapping "Sign In / Create Account") right back
+        // to /analyze.
+        const { data: { session: liveSession } } = await supabase.auth.getSession();
+        if (!liveSession) return;
+
         if (termsAccepted === false) {
           await supabase
             .from("user_subscriptions")
@@ -250,16 +264,15 @@ const Auth = () => {
             }, { onConflict: 'user_id' });
           await refetchTerms();
         }
-        // Redirect to analyze once terms are handled
-        if (termsAccepted === true || termsAccepted === false) {
+        if (termsAccepted === true) {
           navigate("/analyze", { replace: true });
         }
       }
     };
     autoAcceptAndRedirect();
-  }, [isLoading, user, termsAccepted, navigate, refetchTerms]);
+  }, [isLoading, user, termsAccepted, navigate, refetchTerms, showBonusDialog, showSignUpOtp]);
 
-  // Show loading spinner while checking auth
+// Show loading spinner while checking auth
   if (isLoading) {
     return (
       <div className="min-h-screen gradient-hero flex items-center justify-center">
@@ -275,7 +288,16 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!isLogin && !displayName.trim()) {
+      toast({
+        title: "Name Required",
+        description: "Please enter your name to create an account.",
         variant: "destructive",
       });
       return;
@@ -313,7 +335,7 @@ const Auth = () => {
           description: "You've successfully logged in.",
         });
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -322,38 +344,20 @@ const Auth = () => {
         });
         if (error) throw error;
         
-        // Update the user_subscriptions table to mark terms as accepted
-        const { data: { user: newUser } } = await supabase.auth.getUser();
-        if (newUser) {
-          await supabase
-            .from("user_subscriptions")
-            .upsert({
-              user_id: newUser.id,
-              terms_accepted: true,
-              terms_accepted_timestamp: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
-
-          // Give 5 free credits to new users
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 365); // 1 year validity
-
-          await supabase
-            .from("credit_purchases")
-            .insert({
-              user_id: newUser.id,
-              credits_total: 5,
-              credits_used: 0,
-              purchased_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-              plan_name: "Welcome Bonus",
-            });
+        // If session is null, it means email confirmation is required
+        if (signUpData.user && !signUpData.session) {
+          setShowSignUpOtp(true);
+          toast({
+            title: "Verification code sent!",
+            description: "Check your email for the 6-digit verification code.",
+          });
+          setLoading(false); // Stop loading so user can enter OTP
+          return;
         }
         
-        toast({
-          title: "Account created!",
-          description: "Congratulations!! You have got 5 FREE credits as a signing up bonus!!",
-        });
-
+        if (signUpData.user) {
+          await handleAfterVerification(signUpData.user);
+        }
       }
     } catch (error: any) {
       let message = error.message;
@@ -363,6 +367,65 @@ const Auth = () => {
       toast({
         title: "Error",
         description: message,
+        variant: "destructive",
+      });
+    } finally {
+      if (!showSignUpOtp) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleAfterVerification = async (newUser: any) => {
+    // Welcome credits for normal users live on user_subscriptions (the
+    // authoritative balance source). credit_purchases is reserved for
+    // tracking actual paid batches.
+    await supabase
+      .from("user_subscriptions")
+      .upsert({
+        user_id: newUser.id,
+        display_name: displayName || newUser.email?.split('@')[0],
+        terms_accepted: true,
+        terms_accepted_timestamp: new Date().toISOString(),
+        credits_total: 5,
+        credits_used: 0,
+      }, { onConflict: 'user_id' });
+
+    setShowBonusDialog(true);
+  };
+
+  const handleVerifySignUpOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signUpOtp || signUpOtp.length < 6) {
+      toast({
+        title: "Invalid code",
+        description: "Please enter the verification code from your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: signUpOtp,
+        type: 'signup'
+      });
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        await handleAfterVerification(data.user);
+        toast({
+          title: "Email verified!",
+          description: "Your account is now ready.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Verification failed",
+        description: error.message || "Please check your code and try again.",
         variant: "destructive",
       });
     } finally {
@@ -376,7 +439,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -555,7 +618,7 @@ const Auth = () => {
     if (!isOnline()) {
       toast({
         title: "Connection Error",
-        description: "Looks like you are not connected to the internet",
+        description: "looks like you are not connected to the internet",
         variant: "destructive",
       });
       return;
@@ -563,53 +626,30 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const deviceId = getPersistentDeviceId();
-      
-      // 1. Check if device has already used guest quota
-      const alreadyUsed = await hasUsedGuestQuota(deviceId);
-      if (alreadyUsed) {
-        toast({
-          title: "Guest Limit Reached",
-          description: "This device has already used the Guest Sign-in. Please sign in or create an account to continue.",
-          variant: "destructive",
-        });
-        return;
+      const deviceId = await getPersistentDeviceId();
+
+      const response = await signInAsGuest(deviceId);
+      if (response.error) throw response.error;
+
+      const guestUser = response.data?.user;
+      if (!guestUser) {
+        throw new Error("Guest sign-in succeeded but no user was returned.");
       }
 
-      // 2. Perform Guest Sign-in
-      const { data, error } = await signInAsGuest(deviceId);
-      if (error) throw error;
+      // Persist preference so the guest stays signed in across launches
+      // until they explicitly log out.
+      localStorage.setItem("keepSignedIn", "true");
 
-      const newUser = data.user;
-      if (newUser) {
-        // 3. Mark device as used in user_subscriptions for this device
-        await supabase
-          .from("user_subscriptions")
-          .upsert({
-            user_id: newUser.id,
-            display_name: `guest_${deviceId}`, // Used to track device usage
-            terms_accepted: true,
-            terms_accepted_timestamp: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
-
-        // 4. Give 5 free credits
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
-
-        await supabase
-          .from("credit_purchases")
-          .insert({
-            user_id: newUser.id,
-            credits_total: 5,
-            credits_used: 0,
-            purchased_at: new Date().toISOString(),
-            expires_at: expiresAt.toISOString(),
-            plan_name: "Guest Bonus",
-          });
-
+      if (response.isNewGuest) {
+        // Clear any prior welcome flag so the modal shows on Analyze.
+        localStorage.removeItem("guestWelcomeShown");
+        localStorage.setItem("pendingGuestWelcome", "true");
+      } else {
+        localStorage.setItem("guestWelcomeShown", "true");
+        localStorage.removeItem("pendingGuestWelcome");
         toast({
-          title: "Welcome, Guest!",
-          description: "You've received 5 FREE credits to try Styloren!",
+          title: "Welcome back!",
+          description: "Your guest account and credits have been restored.",
         });
       }
     } catch (error: any) {
@@ -626,7 +666,7 @@ const Auth = () => {
 
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4 sm:px-6 py-safe">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-primary/10 blur-3xl" />
@@ -635,7 +675,7 @@ const Auth = () => {
 
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-elevated animate-scale-in">
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 shadow-elevated animate-scale-in">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
@@ -802,6 +842,63 @@ const Auth = () => {
                 </form>
               )}
             </>
+          ) : showSignUpOtp ? (
+            // Sign Up OTP Verification
+            <>
+              <button
+                onClick={() => setShowSignUpOtp(false)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6 font-body text-sm"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to sign up
+              </button>
+
+              <h1 className="font-display text-2xl font-semibold text-center text-foreground mb-2">
+                Verify your email
+              </h1>
+              <p className="text-muted-foreground text-center mb-8 font-body text-sm">
+                Enter the 6-digit code sent to <strong>{email}</strong>
+              </p>
+
+              <form onSubmit={handleVerifySignUpOtp} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-otp" className="font-body font-medium">Verification Code</Label>
+                  <Input
+                    id="signup-otp"
+                    type="text"
+                    value={signUpOtp}
+                    onChange={(e) => setSignUpOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    required
+                    maxLength={6}
+                    className="h-12 bg-background/50 border-border/50 focus:border-primary font-body text-center text-xl tracking-widest"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || signUpOtp.length < 6}
+                  className="w-full h-12 gradient-primary border-0 font-body font-semibold"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    "Verify & Create Account"
+                  )}
+                </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleAuth}
+                    className="text-sm text-primary hover:text-primary/80 font-body transition-colors"
+                  >
+                    Resend code
+                  </button>
+                </div>
+              </form>
+            </>
           ) : (
             // Login/Signup Flow
             <>
@@ -822,6 +919,21 @@ const Auth = () => {
               </p>
 
               <form onSubmit={handleAuth} className="space-y-6">
+                {!isLogin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="font-body font-medium">Full Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="John Doe"
+                      required
+                      className="h-12 bg-background/50 border-border/50 focus:border-primary font-body"
+                    />
+                  </div>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="email" className="font-body font-medium">Email</Label>
                   <Input
@@ -938,7 +1050,7 @@ const Auth = () => {
               </form>
 
               {/* Toggle */}
-              <div className="mt-6 text-center space-y-4">
+              <div className="mt-6 text-center">
                 <button
                   onClick={() => {
                     setIsLogin(!isLogin);
@@ -951,27 +1063,49 @@ const Auth = () => {
                     {isLogin ? "Sign up" : "Sign in"}
                   </span>
                 </button>
-
-                <div className="flex flex-col items-center gap-3 pt-4 border-t border-border/50">
-                  <p className="text-xs text-muted-foreground font-body">
-                    Want to try Styloren without an account?
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleGuestSignIn}
-                    disabled={loading}
-                    className="text-primary hover:text-primary/80 hover:bg-primary/10 font-body flex items-center gap-2"
-                  >
-                    <UserCircle className="w-4 h-4" />
-                    Sign in as Guest
-                  </Button>
-                </div>
               </div>
             </>
           )}
         </div>
+
+        {/* Guest Sign-In Mini-Card — shown only on login tab, not during forgot password */}
+        {isLogin && !showForgotPassword && (
+          <div className="mt-5 bg-card/60 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-border/40 animate-slide-up" style={{ animationDelay: "0.15s" }}>
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex items-center gap-2 mb-1">
+                <CircleUser className="w-5 h-5 text-primary" />
+                <span className="font-display text-sm font-semibold text-foreground">
+                  Try without an account
+                </span>
+              </div>
+
+              <p className="text-xs text-muted-foreground font-body">
+                Instantly, no sign-up needed
+              </p>
+              <Button
+                id="guest-signin-btn"
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleGuestSignIn}
+                disabled={loading}
+                className="mt-1 px-6 font-body font-medium border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-all"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <CircleUser className="w-3.5 h-3.5 mr-2" />
+                    Sign in as Guest
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Terms Dialog */}
@@ -988,17 +1122,51 @@ const Auth = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Privacy Dialog */}
-      <Dialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
-        <DialogContent className="max-w-lg max-h-[80vh] p-0">
-          <DialogHeader className="p-6 pb-0">
-            <div className="flex items-center">
-              <DialogTitle className="font-display text-lg">Privacy Policy</DialogTitle>
+      {/* Welcome Bonus Dialog */}
+      <Dialog open={showBonusDialog} onOpenChange={setShowBonusDialog}>
+        <DialogContent className="max-w-sm p-0 overflow-hidden bg-card border-0 shadow-2xl rounded-3xl animate-scale-in">
+          <div className="relative p-8 flex flex-col items-center text-center gap-6">
+            {/* Celebration Background Effect */}
+            <div className="absolute inset-0 pointer-events-none opacity-20">
+              <div className="absolute top-0 left-1/4 w-32 h-32 bg-primary/30 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute bottom-0 right-1/4 w-32 h-32 bg-accent/30 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
             </div>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] px-6 pb-6">
-            <PrivacyContent />
-          </ScrollArea>
+
+            <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-lg transform rotate-6 animate-float">
+              <Sparkles className="w-10 h-10 text-primary-foreground" />
+            </div>
+            
+            <div className="space-y-2 relative z-10">
+              <h2 className="font-display text-2xl font-bold text-foreground">
+                Wooohoooo! 🥳
+              </h2>
+              <p className="text-muted-foreground font-body leading-relaxed">
+                Welcome to the style family, <span className="text-primary font-semibold">{displayName}</span>!
+              </p>
+            </div>
+
+            <div className="w-full bg-primary/5 rounded-2xl p-6 border border-primary/10 relative z-10">
+              <div className="text-4xl font-bold text-primary mb-1 animate-scale-in">
+                5
+              </div>
+              <div className="text-sm font-semibold text-primary/80 uppercase tracking-wider">
+                Credits Added
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 font-body">
+                You've received your signup bonus! Use them to scan and analyze your first outfits.
+              </p>
+            </div>
+
+            <Button 
+              onClick={() => {
+                setShowBonusDialog(false);
+                navigate("/analyze", { replace: true });
+              }}
+              className="w-full h-12 gradient-primary border-0 font-body font-semibold text-lg shadow-lg hover:shadow-primary/20 transition-all relative z-10"
+            >
+              Let's Start!
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
