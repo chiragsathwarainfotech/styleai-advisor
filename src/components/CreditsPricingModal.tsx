@@ -44,6 +44,47 @@ export function CreditsPricingModal({
 
   const showNativeAppRequired = !isNativeMobile;
 
+  // Insert a pending iap_transactions row and start the 5-min verification
+  // timer. Used for both confirmed purchases (waiting for webhook) and
+  // store-side deferred / on-hold payments (test cards, slow-card flow).
+  const startPendingTransaction = async (
+    plan: CreditPlan,
+    transactionId: string,
+    successToast: { title: string; description: string }
+  ): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from("iap_transactions")
+      .insert({
+        user_id: userId,
+        app_user_id: userId,
+        product_id: plan.productId,
+        plan_name: plan.name,
+        credits: plan.credits,
+        status: "pending",
+        transaction_id: transactionId,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[IAP Debug] Database Error:", error);
+      toast({
+        title: "Verification Error",
+        description: "Payment received but couldn't sync. Please use Restore Purchases later.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    console.log("[IAP Debug] Pending record created:", data.id);
+    setPendingTransactionId(data.id);
+    setCountdown(300); // 5 minutes
+    setPaymentDelayed(false);
+    toast(successToast);
+    return true;
+  };
+
   const handlePurchase = async (plan: CreditPlan) => {
     if (!isNativeMobile) {
       toast({
@@ -119,41 +160,7 @@ export function CreditsPricingModal({
           }
 
           // 2. If not already completed, create the pending record for polling
-          console.log("[IAP Debug] Creating record in iap_transactions...");
-
-          const transactionData = {
-            user_id: userId,
-            app_user_id: userId,
-            product_id: plan.productId,
-            plan_name: plan.name,
-            credits: plan.credits,
-            status: 'pending',
-            transaction_id: transactionId,
-            updated_at: new Date().toISOString()
-          };
-
-          const { data, error } = await supabase
-            .from("iap_transactions")
-            .insert(transactionData)
-            .select()
-            .single();
-
-          if (error) {
-            console.error("[IAP Debug] Database Error:", error);
-            toast({
-              title: "Verification Error",
-              description: "Payment successful but couldn't sync. Please use Restore Purchases later.",
-              variant: "destructive",
-            });
-            return;
-          }
-
-          console.log("[IAP Debug] Record created successfully:", data.id);
-          setPendingTransactionId(data.id);
-          setCountdown(300); // 5 minutes
-          setPaymentDelayed(false);
-
-          toast({
+          await startPendingTransaction(plan, transactionId, {
             title: "Payment Success! 💳",
             description: "Transaction started. Please wait while we verify.",
           });
@@ -163,8 +170,41 @@ export function CreditsPricingModal({
         throw iapError;
       }
     } catch (error: any) {
-      if (error?.code === "USER_CANCELLED" || error?.message?.includes("cancel")) {
+      const code = String(error?.code ?? "").toUpperCase();
+      const message = String(
+        error?.message ?? error?.underlyingErrorMessage ?? ""
+      ).toLowerCase();
+
+      const isCancelled =
+        code === "USER_CANCELLED" ||
+        code === "PURCHASE_CANCELLED_ERROR" ||
+        message.includes("cancel");
+
+      // Play Billing "slow test card" / iOS deferred purchase / Ask-to-Buy:
+      // RevenueCat throws PAYMENT_PENDING_ERROR rather than returning a
+      // customerInfo. We still want the user to see the 5-min timer and
+      // (when it expires) the "we're working on your payment" screen,
+      // because the webhook will eventually arrive and grant credits.
+      const isPending =
+        code === "PAYMENT_PENDING_ERROR" ||
+        code === "PRODUCT_ALREADY_PURCHASED_ERROR" ||
+        message.includes("pending") ||
+        message.includes("deferred") ||
+        message.includes("ask to buy");
+
+      if (isCancelled) {
         console.log("Purchase cancelled by user");
+      } else if (isPending) {
+        console.log("[IAP Debug] Detected pending payment, opening verification flow.");
+        // No real transaction id yet — use a placeholder. The webhook's
+        // user/product fallback path overwrites it with the real id when
+        // the payment eventually clears.
+        const placeholderTxId = `pending_${userId}_${Date.now()}`;
+        await startPendingTransaction(plan, placeholderTxId, {
+          title: "Payment Pending 💳",
+          description:
+            "Your payment is being processed. We'll add credits and notify you when it clears.",
+        });
       } else {
         toast({
           title: "Purchase Failed",
