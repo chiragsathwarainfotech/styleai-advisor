@@ -172,6 +172,34 @@
   .animate-scale-in {
     animation: scaleIn 0.4s ease-out forwards;
   }
+
+  /* Respect device safe areas (notches, status bars, home indicator) when
+     a screen has no other inset handling. */
+  .py-safe {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .pb-safe {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+
+  .pt-safe {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
+
+/* Keep horizontal overflow contained without converting the body into a
+   scroll container — overflow-x:hidden on body broke vertical scrolling
+   inside the Capacitor WebView on Android. `overflow-x: clip` clips
+   horizontal overflow purely visually and leaves vertical scrolling
+   alone. */
+html, body {
+  max-width: 100vw;
+}
+
+body {
+  overflow-x: clip;
 }
 
 @keyframes fadeIn {

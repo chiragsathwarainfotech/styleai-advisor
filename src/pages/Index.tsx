@@ -6,7 +6,7 @@ const Index = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4 sm:px-6 py-safe">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-primary/10 blur-3xl" />
@@ -23,16 +23,16 @@ const Index = () => {
         </div>
 
         {/* Main heading */}
-        <h1 
-          className="font-display text-5xl md:text-7xl font-semibold text-foreground mb-6 animate-slide-up"
+        <h1
+          className="font-display text-4xl sm:text-5xl md:text-7xl font-semibold text-foreground mb-4 sm:mb-6 animate-slide-up"
           style={{ animationDelay: "0.1s" }}
         >
           Styloren
         </h1>
 
         {/* Tagline */}
-        <p 
-          className="font-body text-lg md:text-xl text-muted-foreground mb-12 leading-relaxed animate-slide-up"
+        <p
+          className="font-body text-base sm:text-lg md:text-xl text-muted-foreground mb-8 sm:mb-12 leading-relaxed animate-slide-up"
           style={{ animationDelay: "0.2s" }}
         >
           Your personal AI fashion advisor

@@ -19,14 +19,14 @@ export function ScanDetailModal({ scan, open, onOpenChange }: ScanDetailModalPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="font-display text-xl">Outfit Analysis</DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">{formattedDate}</p>
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90vh] p-0 overflow-hidden">
+        <DialogHeader className="p-4 sm:p-6 pb-0">
+          <DialogTitle className="font-display text-lg sm:text-xl">Outfit Analysis</DialogTitle>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">{formattedDate}</p>
         </DialogHeader>
 
         <ScrollArea className="max-h-[70vh]">
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Image */}
             <div className="rounded-xl overflow-hidden bg-muted">
               {scan.signed_image_url ? (
