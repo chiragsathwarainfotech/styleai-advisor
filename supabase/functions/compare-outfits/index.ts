@@ -142,58 +142,59 @@ serve(async (req) => {
       const mimeType = img.includes(';') ? img.split(';')[0].split(':')[1] : "image/jpeg";
       const base64Data = img.includes('base64,') ? img.split('base64,')[1] : img;
       return {
-        inline_data: {
-          mime_type: mimeType || "image/jpeg",
+        inlineData: {
+          mimeType: mimeType || "image/jpeg",
           data: base64Data
         }
       };
     });
 
     const fallbackModels = [
+      'gemini-3.5-flash',
       'gemini-2.5-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-      'gemini-3-flash',
-      'gemini-1.5-flash'
+      'gemini-1.5-flash',
+      'gemini-2.5-pro'
     ];
 
-    let response;
+    let response = null;
     let errorData = null;
 
     for (const model of fallbackModels) {
       console.log(`Trying model: ${model}`);
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: comparisonPrompt },
-                { text: `I have ${images.length} outfit photos to compare.${safeOccasion ? ` I'm planning to wear one for: ${safeOccasion}.` : ''} Please analyze each one and recommend the best outfit.` },
-                ...imageParts
-              ]
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: comparisonPrompt },
+                  { text: `I have ${images.length} outfit photos to compare.${safeOccasion ? ` I'm planning to wear one for: ${safeOccasion}.` : ''} Please analyze each one and recommend the best outfit.` },
+                  ...imageParts
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 8192,
             }
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            // Match analyze-outfit: 2048 was getting truncated on
-            // multi-image comparisons (4 outfits × 7 sections each is
-            // 5–7k tokens easily). 8192 is the native ceiling for
-            // Gemini 2.5 Flash.
-            maxOutputTokens: 8192,
-          }
-        }),
-      });
+          }),
+        });
 
-      if (response.ok) {
-        console.log(`Successfully generated content using model: ${model}`);
-        break;
-      } else {
-        errorData = await response.json();
-        console.warn(`Model ${model} failed with status ${response.status}`);
+        if (res.ok) {
+          response = res;
+          console.log(`Successfully generated content using model: ${model}`);
+          break;
+        } else {
+          errorData = await res.json().catch(() => null);
+          console.warn(`Model ${model} failed with status ${res.status}. Error:`, errorData);
+        }
+      } catch (fetchErr) {
+        console.error(`Network or fetch error for model ${model}:`, fetchErr);
+        errorData = { error: fetchErr.message || String(fetchErr) };
       }
     }
 

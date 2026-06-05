@@ -160,51 +160,51 @@ serve(async (req) => {
     const base64Data = imageBase64.split('base64,')[1];
 
     const fallbackModels = [
+      'gemini-3.5-flash',
       'gemini-2.5-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-      'gemini-3-flash',
-      'gemini-1.5-flash'
+      'gemini-1.5-flash',
+      'gemini-2.5-pro'
     ];
 
-    let response;
+    let response = null;
     let errorData = null;
 
     for (const model of fallbackModels) {
       console.log(`Trying model: ${model}`);
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: getFashionPrompt(safeUserName) },
-              {
-                inline_data: {
-                  mime_type: mimeType || "image/jpeg",
-                  data: base64Data
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: getFashionPrompt(safeUserName) },
+                {
+                  inlineData: {
+                    mimeType: mimeType || "image/jpeg",
+                    data: base64Data
+                  }
                 }
-              }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            // 2048 was clipping ~half of analyses mid-"Colour & Style
-            // Rules" — the prompt asks for 7 detailed sections and bursts
-            // past 2k tokens whenever the model is verbose. 8192 is the
-            // native ceiling for Gemini 2.5 Flash output and leaves
-            // ample headroom even on long, accessory-heavy outfits.
-            maxOutputTokens: 8192,
-          }
-        }),
-      });
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 8192,
+            }
+          }),
+        });
 
-      if (response.ok) {
-        console.log(`Successfully generated content using model: ${model}`);
-        break;
-      } else {
-        errorData = await response.json();
-        console.warn(`Model ${model} failed with status ${response.status}`);
+        if (res.ok) {
+          response = res;
+          console.log(`Successfully generated content using model: ${model}`);
+          break;
+        } else {
+          errorData = await res.json().catch(() => null);
+          console.warn(`Model ${model} failed with status ${res.status}. Error:`, errorData);
+        }
+      } catch (fetchErr) {
+        console.error(`Network or fetch error for model ${model}:`, fetchErr);
+        errorData = { error: fetchErr.message || String(fetchErr) };
       }
     }
 

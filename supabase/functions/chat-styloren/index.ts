@@ -58,7 +58,7 @@ function buildGeminiContents(
     const mimeType = imageBase64.split(";")[0].split(":")[1] || "image/jpeg";
     const base64Data = imageBase64.split("base64,")[1];
     if (base64Data) {
-      currentParts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+      currentParts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
     }
   }
 
@@ -151,40 +151,45 @@ serve(async (req) => {
     const systemInstruction = { parts: [{ text: getSystemPrompt(safeUserName) }] };
 
     const fallbackModels = [
-      "gemini-2.5-flash",
-      "gemini-3.1-flash-lite",
-      "gemini-2.5-flash-lite",
-      "gemini-3-flash",
-      "gemini-1.5-flash",
+      'gemini-3.5-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro'
     ];
 
-    let response: Response | undefined;
+    let response = null;
     let errorData: any = null;
 
     for (const model of fallbackModels) {
       console.log(`Trying model: ${model}`);
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction,
-            contents,
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 1024,
-            },
-          }),
-        }
-      );
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction,
+              contents,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1024,
+              },
+            }),
+          }
+        );
 
-      if (response.ok) {
-        console.log(`Successfully generated chat response using model: ${model}`);
-        break;
+        if (res.ok) {
+          response = res;
+          console.log(`Successfully generated chat response using model: ${model}`);
+          break;
+        }
+        errorData = await res.json().catch(() => null);
+        console.warn(`Model ${model} failed with status ${res.status}. Error:`, errorData);
+      } catch (fetchErr) {
+        console.error(`Network or fetch error for model ${model}:`, fetchErr);
+        errorData = { error: fetchErr.message || String(fetchErr) };
       }
-      errorData = await response.json().catch(() => null);
-      console.warn(`Model ${model} failed with status ${response.status}`);
     }
 
     if (!response || !response.ok) {
