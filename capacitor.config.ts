@@ -14,7 +14,9 @@ const config: CapacitorConfig = {
     contentInset: 'never',
   },
   plugins: {
-    PushNotifications: {
+    // @capacitor-firebase/messaging — controls how notifications appear
+    // while the app is in the foreground on both iOS and Android.
+    FirebaseMessaging: {
       presentationOptions: ["badge", "sound", "alert"]
     }
   }

@@ -20,6 +20,16 @@ import { AnalysisCard } from "@/components/AnalysisCard";
 import { IAPSubscriptionChecker } from "@/components/IAPSubscriptionChecker";
 import { compressImage } from "@/lib/imageCompression";
 import { isOnline } from "@/lib/connectivity";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Analyze = () => {
   const { user, isLoading, termsAccepted, isGuest } = useAuth();
@@ -31,6 +41,7 @@ const Analyze = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [showNoCredits, setShowNoCredits] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
+  const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
 
   // Name state
   const [showNameModal, setShowNameModal] = useState(false);
@@ -76,9 +87,22 @@ const Analyze = () => {
   };
 
   const handleGetCredits = () => {
+    // Guests must create a real account before purchasing credits
+    if (isGuest) {
+      setShowCreateAccountDialog(true);
+      setShowNoCredits(false);
+      return;
+    }
     console.log("handleGetCredits triggered: showing pricing modal");
     setShowPricing(true);
     setShowNoCredits(false);
+  };
+
+  const handleCreateAccount = async () => {
+    setShowCreateAccountDialog(false);
+    // Sign out of the guest session so /auth doesn't redirect back to /analyze
+    await supabase.auth.signOut();
+    navigate("/auth");
   };
 
   const handlePlanPurchased = async (plan: CreditPlan): Promise<boolean> => {
@@ -565,6 +589,27 @@ const Analyze = () => {
         userId={user?.id}
         onPlanPurchased={handlePlanPurchased}
       />
+
+      {/* Create Account prompt for guests trying to buy credits */}
+      <AlertDialog open={showCreateAccountDialog} onOpenChange={setShowCreateAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-center">Create an account first</AlertDialogTitle>
+            <AlertDialogDescription className="text-center pt-2">
+              You're currently using a guest session. Create a free account to purchase credits and keep them safe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center gap-4 pt-4">
+            <AlertDialogCancel className="px-8 min-w-[100px]">Not now</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCreateAccount}
+              className="gradient-primary border-0 px-8 min-w-[100px]"
+            >
+              Create Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

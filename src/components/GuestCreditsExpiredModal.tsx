@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -21,6 +22,13 @@ interface GuestCreditsExpiredModalProps {
 export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps) {
   const navigate = useNavigate();
 
+  // Sign out of the guest session first, otherwise /auth redirects logged-in
+  // guests straight back to /analyze.
+  const handleSignIn = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
   return (
     <AlertDialog open={open}>
       <AlertDialogContent className="max-w-sm mx-auto">
@@ -36,7 +44,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
 
           <AlertDialogDescription className="text-center font-body text-base leading-relaxed">
             You've used all{" "}
-            <strong className="text-foreground">5 free credits</strong>.
+            <strong className="text-foreground">3 free credits</strong>.
             <br />
             Please sign in and purchase credits to continue enjoying Styloren.
           </AlertDialogDescription>
@@ -46,7 +54,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
           {/* Primary CTA */}
           <Button
             id="guest-expired-signin-btn"
-            onClick={() => navigate("/auth")}
+            onClick={handleSignIn}
             className="w-full gradient-primary border-0 h-12 font-body font-semibold"
           >
             <UserCircle className="w-4 h-4 mr-2" />
@@ -58,7 +66,7 @@ export function GuestCreditsExpiredModal({ open }: GuestCreditsExpiredModalProps
             <Sparkles className="w-3 h-3 text-primary" />
             <p className="text-xs text-center text-muted-foreground font-body">
               New users get{" "}
-              <span className="text-primary font-semibold">5 free credits</span>{" "}
+              <span className="text-primary font-semibold">1 free credit</span>{" "}
               on sign-up!
             </p>
           </div>

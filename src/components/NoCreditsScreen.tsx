@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Lock, UserCircle } from "lucide-react";
 
@@ -10,6 +11,13 @@ interface NoCreditsScreenProps {
 
 export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsScreenProps) {
   const navigate = useNavigate();
+
+  // Sign out of the guest session first, otherwise /auth redirects logged-in
+  // guests straight back to /analyze.
+  const handleSignIn = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
 
   // Guest variant: nudge to sign in
   if (isGuest) {
@@ -28,7 +36,7 @@ export function NoCreditsScreen({ isExpired, onGetCredits, isGuest }: NoCreditsS
           <div className="flex flex-col gap-3 max-w-xs mx-auto">
             <Button
               id="guest-nocredits-signin-btn"
-              onClick={() => navigate("/auth")}
+              onClick={handleSignIn}
               className="w-full gradient-primary border-0 h-12"
             >
               <UserCircle className="w-5 h-5 mr-2" />

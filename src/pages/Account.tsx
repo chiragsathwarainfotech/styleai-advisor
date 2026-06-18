@@ -24,6 +24,7 @@ import { CreditsPricingModal } from "@/components/CreditsPricingModal";
 import { useCredits, CreditPlan } from "@/hooks/useCredits";
 import { useScanHistory } from "@/hooks/useScanHistory";
 import { useToast } from "@/hooks/use-toast";
+import { isGuestUser } from "@/lib/guest";
 import {
   Dialog,
   DialogContent,
@@ -57,8 +58,17 @@ const Account = () => {
   const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const isGuest = isGuestUser(user);
+
+  const handleCreateAccount = async () => {
+    setShowCreateAccountDialog(false);
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -239,11 +249,12 @@ const Account = () => {
           value: user.email,
           onClick: undefined,
         },
-        {
+        // Guests can't change a password (no real account)
+        ...(isGuest ? [] : [{
           icon: Lock,
           label: "Change Password",
           onClick: () => setShowPasswordDialog(true),
-        },
+        }]),
         {
           icon: LogOut,
           label: "Log Out",
@@ -252,7 +263,8 @@ const Account = () => {
         },
       ],
     },
-    {
+    // Scan history features are not available to guests
+    ...(isGuest ? [] : [{
       title: "My Activity",
       items: [
         {
@@ -282,7 +294,7 @@ const Account = () => {
           value: totalCount === 0 ? "No scans" : `${totalCount} scan${totalCount !== 1 ? 's' : ''}`,
         },
       ],
-    },
+    }]),
     {
       title: "Support",
       items: [
@@ -407,7 +419,7 @@ const Account = () => {
 
           {/* Get Credits button */}
           <Button
-            onClick={() => setShowPricing(true)}
+            onClick={() => isGuest ? setShowCreateAccountDialog(true) : setShowPricing(true)}
             className="w-full mt-4 gradient-primary border-0"
           >
             <Sparkles className="w-4 h-4 mr-2" />
@@ -529,6 +541,27 @@ const Account = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Account prompt for guests trying to buy credits */}
+      <AlertDialog open={showCreateAccountDialog} onOpenChange={setShowCreateAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-center">Create an account first</AlertDialogTitle>
+            <AlertDialogDescription className="text-center pt-2">
+              You're currently using a guest session. Create a free account to purchase credits and keep them safe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center gap-4 pt-4">
+            <AlertDialogCancel className="px-8 min-w-[100px]">Not now</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCreateAccount}
+              className="gradient-primary border-0 px-8 min-w-[100px]"
+            >
+              Create Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Credits Pricing Modal */}
       <CreditsPricingModal

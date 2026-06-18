@@ -624,7 +624,7 @@ const Auth = () => {
         console.error("[Guest] Error saving subscription:", subError);
       }
 
-      // 5. Give 1 free credit
+      // 5. Give 3 free credits
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30); // 30 days for guest
 
@@ -632,7 +632,7 @@ const Auth = () => {
         .from("credit_purchases")
         .insert({
           user_id: newUser.id,
-          credits_total: 1,
+          credits_total: 3,
           credits_used: 0,
           purchased_at: new Date().toISOString(),
           expires_at: expiresAt.toISOString(),
@@ -645,7 +645,7 @@ const Auth = () => {
 
       toast({
         title: "Welcome, Guest!",
-        description: "You've received 1 FREE credit to try Styloren!",
+        description: "You've received 3 FREE credits to try Styloren!",
       });
     } catch (error: any) {
       console.error("Guest Auth Error:", error);
@@ -1015,7 +1015,7 @@ const Auth = () => {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground font-body">
-                    Get <span className="font-semibold text-primary">1 free credit</span> instantly, no sign-up needed
+                    Get <span className="font-semibold text-primary">3 free credits</span> instantly, no sign-up needed
                   </p>
                   <Button
                     id="guest-signin-btn"

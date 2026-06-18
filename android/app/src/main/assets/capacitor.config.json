@@ -9,7 +9,7 @@
 		"contentInset": "never"
 	},
 	"plugins": {
-		"PushNotifications": {
+		"FirebaseMessaging": {
 			"presentationOptions": [
 				"badge",
 				"sound",
