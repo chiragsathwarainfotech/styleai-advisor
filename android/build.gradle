@@ -30,6 +30,13 @@ task clean(type: Delete) {
 }
 
 subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'androidx.core:core:1.13.0'
+            force 'androidx.core:core-ktx:1.13.0'
+        }
+    }
+
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions {
             jvmTarget = "17"

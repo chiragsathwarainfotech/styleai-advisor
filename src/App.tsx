@@ -21,6 +21,7 @@ import { User } from "lucide-react";
 import { useIOSLogic } from "./lib/platform";
 
 import { supabase } from "@/integrations/supabase/client";
+import { getPersistentDeviceId } from "@/lib/guest";
 import { NotificationService } from "@/lib/NotificationService";
 
 const queryClient = new QueryClient();
@@ -29,15 +30,21 @@ const App = () => {
   useEffect(() => {
     async function logAppOpen() {
       try {
+        // platform is 'ios' | 'android' on native, 'web' otherwise
         const platform = Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web';
-        const { data: { session } } = await supabase.auth.getSession();
+
+        // Persistent (localStorage-based) device identifier — works on web,
+        // iOS and Android without requiring a native Capacitor plugin.
+        const deviceId = getPersistentDeviceId();
 
         const response = await supabase.functions.invoke('log-app-open', {
           body: {
             logType: 'app_open',
             platform,
+            deviceId,
             deviceInfo: {
               platform,
+              userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
               timestamp: new Date().toISOString(),
             },
             message: 'App opened',

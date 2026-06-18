@@ -17,25 +17,43 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { logType = 'app_open', platform, deviceInfo, message } = body;
+    const { logType = 'app_open', platform, deviceInfo, message, deviceId = null } = body;
 
     let userId = null;
+    let userName = null;
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : null;
 
-    // If user is authenticated, get their ID
+    // If user is authenticated, get their ID and resolve a human-readable name
     if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (!error && user) {
         userId = user.id;
+
+        // Prefer the display_name stored in user_subscriptions, fall back to email
+        const { data: sub } = await supabase
+          .from('user_subscriptions')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        userName =
+          sub?.display_name ||
+          (user.user_metadata as Record<string, any>)?.display_name ||
+          (user.user_metadata as Record<string, any>)?.full_name ||
+          user.email ||
+          null;
       }
     }
 
-    // Insert log entry
+    // Insert log entry.
+    // For logged-in users we record user_name; for guests/anonymous we record device_id.
     const { data, error } = await supabase
       .from('app_logs')
       .insert({
         user_id: userId,
+        user_name: userName,
+        device_id: deviceId,
         log_type: logType,
         platform: platform,
         device_info: deviceInfo || {},
@@ -47,7 +65,11 @@ serve(async (req) => {
       throw error;
     }
 
-    console.log(`[App Logs] Logged ${logType} for user: ${userId || 'guest'}`);
+    console.log(
+      `[App Logs] Logged ${logType} on ${platform || 'unknown'} for ${
+        userName ? `user "${userName}"` : `device ${deviceId || 'unknown'}`
+      }`
+    );
 
     return new Response(
       JSON.stringify({ success: true, data }),

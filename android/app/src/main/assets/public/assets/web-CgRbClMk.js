@@ -1,0 +1,1 @@
+import{W as e}from"./index-C8NyQoR2.js";class t extends e{getStatus(){return Promise.resolve({status:"authorized"})}requestPermission(){return Promise.resolve({status:"authorized"})}}export{t as AppTrackingTransparencyWeb};
