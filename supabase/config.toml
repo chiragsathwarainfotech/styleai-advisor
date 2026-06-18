@@ -14,3 +14,15 @@ verify_jwt = false
 
 [functions.delete-user]
 verify_jwt = false
+
+[functions.log-app-open]
+verify_jwt = false
+
+[functions.on-auth-event]
+verify_jwt = false
+
+[functions.log-session-start]
+verify_jwt = false
+
+[functions.log-hourly-active-users]
+verify_jwt = false

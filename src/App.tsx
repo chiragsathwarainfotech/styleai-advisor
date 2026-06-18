@@ -20,13 +20,43 @@ import { useEffect } from "react";
 import { User } from "lucide-react";
 import { useIOSLogic } from "./lib/platform";
 
+import { supabase } from "@/integrations/supabase/client";
 import { NotificationService } from "@/lib/NotificationService";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
+    async function logAppOpen() {
+      try {
+        const platform = Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web';
+        const { data: { session } } = await supabase.auth.getSession();
+
+        const response = await supabase.functions.invoke('log-app-open', {
+          body: {
+            logType: 'app_open',
+            platform,
+            deviceInfo: {
+              platform,
+              timestamp: new Date().toISOString(),
+            },
+            message: 'App opened',
+          },
+        });
+
+        if (response.error) {
+          throw response.error;
+        }
+
+        console.log('[App Logs] app_open logged', response.data);
+      } catch (error) {
+        console.error('[App Logs] Failed to log app open:', error);
+      }
+    }
+
     async function initApp() {
+      await logAppOpen();
+
       // Initialize RevenueCat
       if (Capacitor.isNativePlatform()) {
         try {
