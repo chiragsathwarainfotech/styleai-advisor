@@ -54,6 +54,8 @@
         <string>fetch</string>
         <string>remote-notification</string>
     </array>
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <true/>
     <key>NSCameraUsageDescription</key>
     <string>Allow access to your camera to take photos of your items and get style advice.</string>
     <key>NSPhotoLibraryUsageDescription</key>
