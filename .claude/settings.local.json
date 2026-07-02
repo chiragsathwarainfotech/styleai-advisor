@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(curl -s http://localhost:8080/)"
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(grep -v \"//\\\\|username\\\\|newUser\\\\|signUpData\\\\|displayName\\\\|userData\")",
+      "Bash(xargs grep -l \"sign\\\\|auth\\\\|login\")",
+      "PowerShell(keytool -list -v -keystore \"$env:USERPROFILE\\\\.android\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android 2>&1 | Select-String \"SHA1\")"
     ]
   }
 }
