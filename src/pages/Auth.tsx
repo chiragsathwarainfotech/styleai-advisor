@@ -1114,7 +1114,7 @@ const Auth = () => {
 
                 <Button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   className="w-full h-12 gradient-primary border-0 font-body font-semibold"
                 >
                   {loading ? (
