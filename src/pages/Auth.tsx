@@ -342,10 +342,11 @@ const Auth = () => {
 
       toast({ title: "Welcome back!", description: "Signed in with Google successfully." });
     } catch (error: any) {
-      if (error.message !== "User cancelled.") {
+      const msg = error?.message || error?.toString() || "";
+      if (msg !== "User cancelled." && msg !== "The user canceled the sign-in flow.") {
         toast({
           title: "Google Sign-In Failed",
-          description: error.message || "Could not sign in with Google. Please try again.",
+          description: msg || "Could not sign in with Google.",
           variant: "destructive",
         });
       }
