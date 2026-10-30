@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+// @ts-ignore
+import nodemailer from "npm:nodemailer@6.9.13";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,47 +47,224 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send email via SendGrid
-async function sendEmailViaSendGrid(
+// Send email via Titan / Custom SMTP or custom domain email providers (Resend, SendGrid, Brevo, Postmark)
+async function sendCustomDomainEmail(
   to: string,
   subject: string,
   html: string
-): Promise<{ success: boolean; error?: string }> {
-  const apiKey = Deno.env.get("SENDGRID_API_KEY");
-  
-  if (!apiKey) {
-    console.error("SendGrid API key not configured");
-    return { success: false, error: "Email service not configured" };
+): Promise<{ success: boolean; error?: string; provider?: string }> {
+  const smtpHost = Deno.env.get("SMTP_HOST") || "smtpout.secureserver.net";
+  const smtpPort = parseInt(Deno.env.get("SMTP_PORT") || "465", 10);
+  const smtpUser = Deno.env.get("SMTP_USER") || "help@styloren.com";
+  const smtpPass = Deno.env.get("SMTP_PASS") || "Styloani@2026";
+  const fromEmail = Deno.env.get("CUSTOM_FROM_EMAIL") || Deno.env.get("FROM_EMAIL") || smtpUser || "help@styloren.com";
+  const fromName = Deno.env.get("CUSTOM_FROM_NAME") || Deno.env.get("FROM_NAME") || "Styloren";
+
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
+  const brevoApiKey = Deno.env.get("BREVO_API_KEY") || Deno.env.get("SENDINBLUE_API_KEY");
+  const postmarkToken = Deno.env.get("POSTMARK_SERVER_TOKEN");
+
+  // 1. Try Custom SMTP (Titan Email)
+  if (smtpHost && smtpUser && smtpPass) {
+    try {
+      console.log(`Sending email to ${to} from ${fromEmail} via SMTP (${smtpHost}:${smtpPort})`);
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+
+      console.log("Email sent successfully via Titan SMTP");
+      return { success: true, provider: "smtp" };
+    } catch (smtpErr: any) {
+      console.error("SMTP sending error:", smtpErr);
+      if (!resendApiKey && !sendgridApiKey && !brevoApiKey && !postmarkToken) {
+        return { success: false, error: `SMTP error: ${smtpErr.message}`, provider: "smtp" };
+      }
+    }
   }
 
-  try {
-    console.log(`Sending email to ${to} via SendGrid`);
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
-        from: { email: "noreply@styloren.com", name: "Styloren" },
-        subject,
-        content: [{ type: "text/html", value: html }],
-      }),
+  // 2. Try Resend
+  if (resendApiKey) {
+    try {
+      console.log(`Sending email to ${to} from ${fromEmail} via Resend`);
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `${fromName} <${fromEmail}>`,
+          to: [to],
+          subject,
+          html,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Resend API error:", response.status, errorText);
+        return { success: false, error: `Resend error: ${errorText}`, provider: "resend" };
+      }
+
+      console.log("Email sent successfully via Resend");
+      return { success: true, provider: "resend" };
+    } catch (err: any) {
+      console.error("Resend request failed:", err);
+      return { success: false, error: err.message, provider: "resend" };
+    }
+  }
+
+  // 2. Try SendGrid
+  if (sendgridApiKey) {
+    try {
+      console.log(`Sending email to ${to} from ${fromEmail} via SendGrid`);
+      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${sendgridApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: to }] }],
+          from: { email: fromEmail, name: fromName },
+          subject,
+          content: [{ type: "text/html", value: html }],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("SendGrid API error:", response.status, errorText);
+        return { success: false, error: `SendGrid error: ${errorText}`, provider: "sendgrid" };
+      }
+
+      console.log("Email sent successfully via SendGrid");
+      return { success: true, provider: "sendgrid" };
+    } catch (err: any) {
+      console.error("SendGrid request failed:", err);
+      return { success: false, error: err.message, provider: "sendgrid" };
+    }
+  }
+
+  // 3. Try Brevo (Sendinblue)
+  if (brevoApiKey) {
+    try {
+      console.log(`Sending email to ${to} from ${fromEmail} via Brevo`);
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json",
+          "accept": "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: fromName, email: fromEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Brevo API error:", response.status, errorText);
+        return { success: false, error: `Brevo error: ${errorText}`, provider: "brevo" };
+      }
+
+      console.log("Email sent successfully via Brevo");
+      return { success: true, provider: "brevo" };
+    } catch (err: any) {
+      console.error("Brevo request failed:", err);
+      return { success: false, error: err.message, provider: "brevo" };
+    }
+  }
+
+  // 4. Try Postmark
+  if (postmarkToken) {
+    try {
+      console.log(`Sending email to ${to} from ${fromEmail} via Postmark`);
+      const response = await fetch("https://api.postmarkapp.com/email", {
+        method: "POST",
+        headers: {
+          "X-Postmark-Server-Token": postmarkToken,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          From: `${fromName} <${fromEmail}>`,
+          To: to,
+          Subject: subject,
+          HtmlBody: html,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Postmark API error:", response.status, errorText);
+        return { success: false, error: `Postmark error: ${errorText}`, provider: "postmark" };
+      }
+
+      console.log("Email sent successfully via Postmark");
+      return { success: true, provider: "postmark" };
+    } catch (err: any) {
+      console.error("Postmark request failed:", err);
+      return { success: false, error: err.message, provider: "postmark" };
+    }
+  }
+
+  console.error("No transactional email provider configured (set RESEND_API_KEY, SENDGRID_API_KEY, BREVO_API_KEY, or POSTMARK_SERVER_TOKEN)");
+  return { 
+    success: false, 
+    error: "No email service configured. Please set RESEND_API_KEY or SENDGRID_API_KEY with your custom domain sender in Supabase Secrets." 
+  };
+}
+
+// Helper to search for user across all pages
+async function findUserByEmail(supabase: any, targetEmail: string) {
+  const normalized = targetEmail.toLowerCase().trim();
+  let page = 1;
+  const perPage = 200;
+
+  while (page <= 25) { // Check up to 5,000 users
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("SendGrid error:", response.status, errorText);
-      return { success: false, error: "Failed to send email" };
+    if (error) {
+      console.error(`Error listing users page ${page}:`, error);
+      break;
     }
 
-    console.log("Email sent successfully via SendGrid");
-    return { success: true };
-  } catch (error) {
-    console.error("SendGrid request failed:", error);
-    return { success: false, error: "Email service unavailable" };
+    const users = data?.users || [];
+    if (users.length === 0) break;
+
+    const found = users.find(
+      (u: any) => u.email?.toLowerCase().trim() === normalized
+    );
+    if (found) {
+      return found;
+    }
+
+    if (users.length < perPage) break;
+    page++;
   }
+
+  return null;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -99,7 +278,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, email, otp, newPassword } = await req.json();
+    const { action, email, otp, newPassword, token } = await req.json();
     
     // Validate action
     if (!action || !['request', 'verify', 'reset'].includes(action)) {
@@ -115,7 +294,6 @@ const handler = async (req: Request): Promise<Response> => {
       // Validate email format
       if (!validateEmail(email)) {
         console.log("Invalid email format provided");
-        // Return success to prevent email enumeration
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -127,7 +305,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       const normalizedEmail = email.toLowerCase().trim();
 
-      // Rate limiting: Check if user has made more than 3 requests in the last hour
+      // Rate limiting: Check if user has made more than 5 requests in the last hour
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { data: rateLimitData, error: rateLimitError } = await supabase
         .from("password_reset_rate_limits")
@@ -139,12 +317,12 @@ const handler = async (req: Request): Promise<Response> => {
         console.error("Rate limit check error:", rateLimitError);
       }
 
-      if (rateLimitData && rateLimitData.length >= 3) {
+      if (rateLimitData && rateLimitData.length >= 5) {
         console.log(`Rate limit exceeded for email`);
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
+            message: "Too many reset attempts. Please wait a few minutes before trying again." 
           }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
@@ -155,26 +333,11 @@ const handler = async (req: Request): Promise<Response> => {
         .from("password_reset_rate_limits")
         .insert({ email: normalizedEmail });
 
-      // Check if email exists in auth.users
-      const { data: userData, error: userError } = await supabase.auth.admin.listUsers();
-      
-      if (userError) {
-        console.error("Error checking user:", userError);
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
-          }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
+      // Check if email exists in auth.users using paginated search
+      const existingUser = await findUserByEmail(supabase, normalizedEmail);
 
-      const userExists = userData?.users?.some(
-        (u) => u.email?.toLowerCase() === normalizedEmail
-      );
-
-      if (!userExists) {
-        console.log(`Email not found`);
+      if (!existingUser) {
+        console.log(`Email not found in registered users: ${normalizedEmail}`);
         // Return success to prevent email enumeration
         return new Response(
           JSON.stringify({ 
@@ -210,46 +373,61 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error("Failed to generate reset code");
       }
 
-      // Send email via SendGrid
-      const subject = "Styloren Password Reset OTP";
+      // Send email via Custom Domain Email Provider
+      const subject = "Styloren - Your Password Reset Code";
       const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #333; font-size: 24px; margin-bottom: 20px;">Password Reset</h1>
-          <p style="color: #666; font-size: 16px; margin-bottom: 20px;">
-            Your Styloren password reset OTP is:
-          </p>
-          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #333;">${otpCode}</span>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff; color: #111827; border-radius: 16px; border: 1px solid #e5e7eb;">
+          <div style="text-align: center; margin-bottom: 28px;">
+            <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #ffffff; font-size: 24px; font-weight: bold;">
+              ✨
+            </div>
+            <h2 style="font-size: 24px; font-weight: 700; margin: 12px 0 4px 0; color: #111827;">Styloren</h2>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">Your personal AI fashion advisor</p>
           </div>
-          <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
-            This OTP is valid for <strong>10 minutes</strong>.
+
+          <div style="background-color: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #f3f4f6; margin-bottom: 24px;">
+            <h1 style="font-size: 18px; font-weight: 600; color: #111827; margin: 0 0 12px 0;">Reset Your Password</h1>
+            <p style="font-size: 15px; color: #4b5563; line-height: 1.5; margin: 0 0 20px 0;">
+              We received a request to reset your password. Use the verification code below to complete the reset:
+            </p>
+            <div style="background-color: #ffffff; border: 2px dashed #e5e7eb; border-radius: 10px; padding: 18px; text-align: center; margin-bottom: 16px;">
+              <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #8b5cf6;">${otpCode}</span>
+            </div>
+            <p style="font-size: 13px; color: #6b7280; margin: 0; text-align: center;">
+              ⏳ This code is valid for <strong>10 minutes</strong>.
+            </p>
+          </div>
+
+          <p style="font-size: 13px; color: #9ca3af; line-height: 1.5; margin: 0 0 12px 0;">
+            If you did not request this password reset, you can safely ignore this email. Your password will remain unchanged.
           </p>
-          <p style="color: #999; font-size: 14px;">
-            If you didn't request a password reset, please ignore this email.
+
+          <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 24px 0;" />
+          <p style="font-size: 12px; color: #9ca3af; text-align: center; margin: 0;">
+            © ${new Date().getFullYear()} Styloren. All rights reserved.
           </p>
         </div>
       `;
 
-      const emailResult = await sendEmailViaSendGrid(normalizedEmail, subject, html);
+      const emailResult = await sendCustomDomainEmail(normalizedEmail, subject, html);
       
       if (!emailResult.success) {
-        console.error("Email sending failed:", emailResult.error);
-        // Still return success to prevent information leakage
+        console.error("Custom domain email sending failed:", emailResult.error);
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: "If this email is registered, you will receive a reset code shortly." 
+            success: false, 
+            message: `Email sending failed: ${emailResult.error || "Please verify your custom domain email configuration in Supabase Secrets."}` 
           }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
-      console.log("Password reset email sent successfully");
+      console.log(`Password reset email successfully sent via ${emailResult.provider || "custom domain"}`);
       
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "If this email is registered, you will receive a reset code shortly." 
+          message: "A 6-digit reset code has been sent to your email." 
         }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
@@ -289,7 +467,7 @@ const handler = async (req: Request): Promise<Response> => {
       if (otpError) {
         console.error("Error verifying OTP:", otpError);
         return new Response(
-          JSON.stringify({ success: false, message: "Verification failed" }),
+          JSON.stringify({ success: false, message: "Verification failed. Please try again." }),
           { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -297,7 +475,7 @@ const handler = async (req: Request): Promise<Response> => {
       if (!otpData) {
         console.log("Invalid or expired OTP");
         return new Response(
-          JSON.stringify({ success: false, message: "Invalid or expired code. Please try again." }),
+          JSON.stringify({ success: false, message: "Invalid or expired code. Please request a new one." }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -344,44 +522,37 @@ const handler = async (req: Request): Promise<Response> => {
 
       const normalizedEmail = email.toLowerCase().trim();
 
-      // Find a valid (unused) OTP record for this email (the one that was verified)
-      const { data: otpData, error: otpError } = await supabase
+      // Find valid verified OTP record for this email
+      let otpQuery = supabase
         .from("password_reset_otps")
         .select("*")
         .eq("email", normalizedEmail)
         .eq("used", false)
         .gte("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (token) {
+        otpQuery = otpQuery.eq("otp_code", token);
+      }
+
+      const { data: otpData, error: otpError } = await otpQuery.maybeSingle();
 
       if (otpError || !otpData) {
-        console.error("No valid verified OTP found");
+        console.error("No valid verified OTP/token found");
         return new Response(
-          JSON.stringify({ success: false, message: "Session expired. Please start the reset process again." }),
+          JSON.stringify({ success: false, message: "Session expired or verification invalid. Please start the reset process again." }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
-      // Find the user by email
-      const { data: userData, error: userError } = await supabase.auth.admin.listUsers();
-      
-      if (userError) {
-        console.error("Error finding user:", userError);
-        return new Response(
-          JSON.stringify({ success: false, message: "Failed to reset password" }),
-          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-
-      const user = userData?.users?.find(
-        (u) => u.email?.toLowerCase() === normalizedEmail
-      );
+      // Find the user by email using paginated search
+      const user = await findUserByEmail(supabase, normalizedEmail);
 
       if (!user) {
-        console.error("User not found");
+        console.error("User not found:", normalizedEmail);
         return new Response(
-          JSON.stringify({ success: false, message: "User not found" }),
+          JSON.stringify({ success: false, message: "User account not found." }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -395,7 +566,7 @@ const handler = async (req: Request): Promise<Response> => {
       if (updateError) {
         console.error("Error updating password:", updateError);
         return new Response(
-          JSON.stringify({ success: false, message: "Failed to update password" }),
+          JSON.stringify({ success: false, message: `Failed to update password: ${updateError.message}` }),
           { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -408,7 +579,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log("Password reset successfully for user:", user.id);
       return new Response(
-        JSON.stringify({ success: true, message: "Password updated successfully" }),
+        JSON.stringify({ success: true, message: "Password updated successfully! You can now log in." }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -420,7 +591,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in password-reset function:", error);
     return new Response(
-      JSON.stringify({ error: "An error occurred" }),
+      JSON.stringify({ error: error.message || "An error occurred" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
