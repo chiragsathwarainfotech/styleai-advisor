@@ -1,5 +1,9 @@
 [
 	{
+		"pkg": "@capacitor-community/apple-sign-in",
+		"classpath": "com.getcapacitor.community.applesignin.SignInWithApple"
+	},
+	{
 		"pkg": "@capacitor-firebase/app",
 		"classpath": "io.capawesome.capacitorjs.plugins.firebase.app.FirebaseAppPlugin"
 	},
@@ -26,6 +30,10 @@
 	{
 		"pkg": "@capacitor/push-notifications",
 		"classpath": "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin"
+	},
+	{
+		"pkg": "@codetrix-studio/capacitor-google-auth",
+		"classpath": "com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth"
 	},
 	{
 		"pkg": "@revenuecat/purchases-capacitor",
