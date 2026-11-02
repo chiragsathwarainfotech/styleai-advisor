@@ -20,6 +20,7 @@ import { AppTrackingTransparency } from 'capacitor-plugin-app-tracking-transpare
 import { useEffect } from "react";
 import { User } from "lucide-react";
 import { useIOSLogic } from "./lib/platform";
+import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 
 import { NotificationService } from "@/lib/NotificationService";
 
@@ -93,6 +94,7 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <ForceUpdateGate />
           <BrowserRouter>
             <AuthProvider>
               <Routes>

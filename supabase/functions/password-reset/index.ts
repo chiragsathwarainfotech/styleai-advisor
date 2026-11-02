@@ -10,6 +10,7 @@ const corsHeaders = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_REGEX = /^\d{6}$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_PASSWORD_LENGTH = 8;
 
 // Validate email format
@@ -56,7 +57,7 @@ async function sendCustomDomainEmail(
   const smtpHost = Deno.env.get("SMTP_HOST") || "smtpout.secureserver.net";
   const smtpPort = parseInt(Deno.env.get("SMTP_PORT") || "465", 10);
   const smtpUser = Deno.env.get("SMTP_USER") || "help@styloren.com";
-  const smtpPass = Deno.env.get("SMTP_PASS") || "Styloani@2026";
+  const smtpPass = Deno.env.get("SMTP_PASS");
   const fromEmail = Deno.env.get("CUSTOM_FROM_EMAIL") || Deno.env.get("FROM_EMAIL") || smtpUser || "help@styloren.com";
   const fromName = Deno.env.get("CUSTOM_FROM_NAME") || Deno.env.get("FROM_NAME") || "Styloren";
 
@@ -391,7 +392,7 @@ const handler = async (req: Request): Promise<Response> => {
               We received a request to reset your password. Use the verification code below to complete the reset:
             </p>
             <div style="background-color: #ffffff; border: 2px dashed #e5e7eb; border-radius: 10px; padding: 18px; text-align: center; margin-bottom: 16px;">
-              <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #8b5cf6;">${otpCode}</span>
+              <span style="display: inline-block; font-family: monospace; font-size: 28px; line-height: 1.2; font-weight: 800; letter-spacing: 4px; white-space: nowrap; color: #8b5cf6;">${otpCode}</span>
             </div>
             <p style="font-size: 13px; color: #6b7280; margin: 0; text-align: center;">
               ⏳ This code is valid for <strong>10 minutes</strong>.
@@ -520,23 +521,28 @@ const handler = async (req: Request): Promise<Response> => {
         );
       }
 
+      // The verification token proves the emailed code was checked, so it is
+      // mandatory. A raw 6-digit code is not accepted here.
+      if (typeof token !== "string" || !UUID_REGEX.test(token)) {
+        return new Response(
+          JSON.stringify({ success: false, message: "Session expired or verification invalid. Please start the reset process again." }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
       const normalizedEmail = email.toLowerCase().trim();
 
       // Find valid verified OTP record for this email
-      let otpQuery = supabase
+      const { data: otpData, error: otpError } = await supabase
         .from("password_reset_otps")
         .select("*")
         .eq("email", normalizedEmail)
+        .eq("otp_code", token)
         .eq("used", false)
         .gte("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (token) {
-        otpQuery = otpQuery.eq("otp_code", token);
-      }
-
-      const { data: otpData, error: otpError } = await otpQuery.maybeSingle();
+        .limit(1)
+        .maybeSingle();
 
       if (otpError || !otpData) {
         console.error("No valid verified OTP/token found");
