@@ -538,6 +538,12 @@ const Auth = () => {
         });
         if (error) throw error;
 
+        // With email confirmation on, Supabase hides existing accounts by
+        // returning a user with no identities and sending no code.
+        if (signUpData.user && signUpData.user.identities?.length === 0) {
+          throw new Error("User already registered");
+        }
+
         // If session is null, it means email confirmation is required
         if (signUpData.user && !signUpData.session) {
           setShowSignUpOtp(true);
@@ -602,7 +608,7 @@ const Auth = () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.verifyOtp({
-        email,
+        email: email.trim().toLowerCase(),
         token: signUpOtp,
         type: 'signup'
       });
