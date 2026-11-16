@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationService } from "@/lib/NotificationService";
 
@@ -22,13 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isGuest, setIsGuest] = useState(false);
 
   const fetchTermsStatus = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_subscriptions")
-      .select("terms_accepted")
-      .eq("user_id", userId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("user_subscriptions")
+        .select("terms_accepted")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    setTermsAccepted(data?.terms_accepted ?? false);
+      if (error) {
+        console.warn("[Auth] fetchTermsStatus error, defaulting to accepted:", error);
+        setTermsAccepted(true);
+        return;
+      }
+
+      setTermsAccepted(data ? data.terms_accepted : true);
+    } catch (err) {
+      console.warn("[Auth] fetchTermsStatus exception:", err);
+      setTermsAccepted(true);
+    }
   };
 
   const refetchTerms = async () => {
@@ -45,9 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const keepSignedIn = localStorage.getItem("keepSignedIn");
       const tempSession = sessionStorage.getItem("tempSession");
 
-      // If user didn't want to keep signed in and this is a new session (no tempSession marker)
-      // then sign them out
-      if (!keepSignedIn && !tempSession) {
+      // Only sign out if the user EXPLICITLY set keepSignedIn to "false"
+      // and their temporary session marker has expired
+      if (keepSignedIn === "false" && !tempSession) {
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         if (existingSession) {
           await supabase.auth.signOut();
@@ -100,8 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Only set loading false after handling the event
-        if (event === "INITIAL_SESSION") {
+        // Set loading false once initial session is determined or user signs in
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
           setIsLoading(false);
         }
 

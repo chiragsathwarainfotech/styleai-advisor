@@ -88,6 +88,8 @@ const Account = () => {
   const { deleteAllScans, totalCount } = useScanHistory(user?.id, hasCredits);
 
   const handleLogout = async () => {
+    localStorage.removeItem("keepSignedIn");
+    sessionStorage.removeItem("tempSession");
     await supabase.auth.signOut();
     navigate("/");
   };

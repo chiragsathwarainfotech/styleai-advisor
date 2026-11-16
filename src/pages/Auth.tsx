@@ -477,36 +477,72 @@ const Auth = () => {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     // Save the "keep signed in" preference
     if (keepSignedIn) {
       localStorage.setItem("keepSignedIn", "true");
+      sessionStorage.removeItem("tempSession");
     } else {
-      localStorage.removeItem("keepSignedIn");
+      localStorage.setItem("keepSignedIn", "false");
       sessionStorage.setItem("tempSession", "true");
     }
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
           password,
         });
         if (error) throw error;
+
+        // Ensure terms are marked as accepted on user_subscriptions in background
+        if (data?.user) {
+          try {
+            await supabase
+              .from("user_subscriptions")
+              .upsert({
+                user_id: data.user.id,
+                terms_accepted: true,
+                terms_accepted_timestamp: new Date().toISOString(),
+              }, { onConflict: 'user_id' });
+          } catch (err) {
+            console.warn("[Auth] Upsert subscription terms error:", err);
+          }
+        }
+
         toast({
           title: "Welcome back!",
           description: "You've successfully logged in.",
         });
+
+        navigate("/analyze", { replace: true });
+        return;
       } else {
         const { data: signUpData, error } = await supabase.auth.signUp({
-          email,
+          email: cleanEmail,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/analyze`,
           },
         });
         if (error) throw error;
+
+        // With email confirmation on, Supabase hides existing accounts by
+        // returning a user with no identities and sending no code.
+        if (signUpData.user && signUpData.user.identities?.length === 0) {
+          throw new Error("User already registered");
+        }
 
         // If session is null, it means email confirmation is required
         if (signUpData.user && !signUpData.session) {
@@ -572,7 +608,7 @@ const Auth = () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.verifyOtp({
-        email,
+        email: email.trim().toLowerCase(),
         token: signUpOtp,
         type: 'signup'
       });
@@ -609,7 +645,8 @@ const Auth = () => {
       return;
     }
 
-    if (!email) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
       toast({
         title: "Email required",
         description: "Please enter your email address.",
@@ -621,22 +658,22 @@ const Auth = () => {
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
-        body: { action: "request", email },
+        body: { action: "request", email: cleanEmail },
       });
 
       if (response.error) throw response.error;
 
       const data = response.data;
-      if (data.success) {
+      if (data?.success) {
         setForgotPasswordStep("otp");
         toast({
           title: "Check your email",
-          description: "If this email is registered, you'll receive a 6-digit code shortly.",
+          description: data.message || "If this email is registered, you'll receive a 6-digit code shortly.",
         });
       } else {
         toast({
-          title: "Error",
-          description: data.message || "Failed to send reset code. Please try again.",
+          title: "Reset Code Request",
+          description: data?.message || "Failed to send reset code. Please try again.",
           variant: "destructive",
         });
       }
@@ -662,19 +699,20 @@ const Auth = () => {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
-        body: { action: "verify", email, otp },
+        body: { action: "verify", email: cleanEmail, otp },
       });
 
       if (response.error) throw response.error;
 
       const data = response.data;
-      if (!data.success) {
+      if (!data?.success) {
         toast({
           title: "Invalid code",
-          description: data.message || "This code is invalid or has expired. Please try again.",
+          description: data?.message || "This code is invalid or has expired. Please try again.",
           variant: "destructive",
         });
         return;
@@ -733,17 +771,18 @@ const Auth = () => {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
     setLoading(true);
     try {
       const response = await supabase.functions.invoke("password-reset", {
-        body: { action: "reset", email, newPassword },
+        body: { action: "reset", email: cleanEmail, newPassword, token: verificationToken },
       });
 
       if (response.error) throw response.error;
 
       const data = response.data;
-      if (!data.success) {
-        throw new Error(data.message || "Failed to reset password");
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to reset password");
       }
 
       // Reset states and go back to login with success message
