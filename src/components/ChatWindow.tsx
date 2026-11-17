@@ -83,7 +83,18 @@ export function ChatWindow({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        let serverError = error.message;
+        try {
+          if (error.context && typeof error.context.json === "function") {
+            const errBody = await error.context.json();
+            serverError = errBody.error || errBody.message || JSON.stringify(errBody);
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(serverError);
+      }
 
       if (data.error) {
         throw new Error(data.error);

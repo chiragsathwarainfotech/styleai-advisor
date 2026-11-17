@@ -187,7 +187,27 @@ const Analyze = () => {
         body: { imageBase64: compressedImage, userName: credits.displayName || undefined, userId: user?.id },
       });
 
-      if (error) throw error;
+      if (error) {
+        let serverError = error.message;
+        try {
+          if (error.context && typeof error.context.json === "function") {
+            const errBody = await error.context.json();
+            if (errBody?.error === "rate_limit_exceeded" || errBody?.message?.includes("too fast")) {
+              setRateLimited(true);
+              toast({
+                title: "You're uploading too fast 🚀",
+                description: errBody?.message || "To keep Styloren safe and smooth for everyone, please wait a moment and try again.",
+              });
+              setTimeout(() => setRateLimited(false), 60000);
+              return;
+            }
+            serverError = errBody.error || errBody.message || JSON.stringify(errBody);
+          }
+        } catch {
+          // ignore parsing error
+        }
+        throw new Error(serverError);
+      }
 
       // Handle rate limit response
       if (data?.error === 'rate_limit_exceeded') {

@@ -151,10 +151,9 @@ serve(async (req) => {
     const systemInstruction = { parts: [{ text: getSystemPrompt(safeUserName) }] };
 
     const fallbackModels = [
-      'gemini-3.5-flash',
-      'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-2.5-pro'
+      'gemini-1.5-pro'
     ];
 
     let response = null;
@@ -186,16 +185,17 @@ serve(async (req) => {
         }
         errorData = await res.json().catch(() => null);
         console.warn(`Model ${model} failed with status ${res.status}. Error:`, errorData);
-      } catch (fetchErr) {
+      } catch (fetchErr: any) {
         console.error(`Network or fetch error for model ${model}:`, fetchErr);
-        errorData = { error: fetchErr.message || String(fetchErr) };
+        errorData = { error: fetchErr?.message || String(fetchErr) };
       }
     }
 
     if (!response || !response.ok) {
       console.error("All Gemini API models failed. Last error:", errorData);
+      const detailedMessage = errorData?.error?.message || errorData?.message || "Chat failed across all models. Please try again.";
       return new Response(
-        JSON.stringify({ error: "Chat failed across all models. Please try again." }),
+        JSON.stringify({ error: detailedMessage }),
         {
           status: response?.status || 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

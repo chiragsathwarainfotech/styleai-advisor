@@ -150,14 +150,13 @@ serve(async (req) => {
     });
 
     const fallbackModels = [
-      'gemini-3.5-flash',
-      'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-2.5-pro'
+      'gemini-1.5-pro'
     ];
 
     let response = null;
-    let errorData = null;
+    let errorData: any = null;
 
     for (const model of fallbackModels) {
       console.log(`Trying model: ${model}`);
@@ -192,15 +191,16 @@ serve(async (req) => {
           errorData = await res.json().catch(() => null);
           console.warn(`Model ${model} failed with status ${res.status}. Error:`, errorData);
         }
-      } catch (fetchErr) {
+      } catch (fetchErr: any) {
         console.error(`Network or fetch error for model ${model}:`, fetchErr);
-        errorData = { error: fetchErr.message || String(fetchErr) };
+        errorData = { error: fetchErr?.message || String(fetchErr) };
       }
     }
 
     if (!response || !response.ok) {
       console.error('All Gemini API models failed. Last error:', errorData);
-      return new Response(JSON.stringify({ error: 'AI comparison failed across all models' }), {
+      const detailedMessage = errorData?.error?.message || errorData?.message || 'AI comparison failed across all models';
+      return new Response(JSON.stringify({ error: detailedMessage }), {
         status: response?.status || 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
